@@ -14,20 +14,21 @@ class DataProcessor:
     def load_data(self) -> pd.DataFrame:
         logger.info(f"Loading data from {self.data_path}")
         
-        encodings = ['utf-8', 'utf-8-sig', 'gbk', 'gb2312', 'gb18030', 'latin1']
+        try:
+            self.df = pd.read_csv(self.data_path, encoding='gb18030', on_bad_lines='skip', encoding_errors='replace')
+            logger.info(f"Loaded {len(self.df)} records with encoding: gb18030")
+            return self.df
+        except Exception as e:
+            logger.error(f"Error loading with gb18030: {e}")
         
-        for encoding in encodings:
-            try:
-                self.df = pd.read_csv(self.data_path, encoding=encoding)
-                logger.info(f"Loaded {len(self.df)} records with encoding: {encoding}")
-                return self.df
-            except UnicodeDecodeError:
-                continue
-            except Exception as e:
-                logger.error(f"Error loading with {encoding}: {e}")
-                continue
+        try:
+            self.df = pd.read_csv(self.data_path, encoding='gbk', on_bad_lines='skip', encoding_errors='replace')
+            logger.info(f"Loaded {len(self.df)} records with encoding: gbk")
+            return self.df
+        except Exception as e:
+            logger.error(f"Error loading with gbk: {e}")
         
-        raise ValueError(f"无法读取文件 {self.data_path}，尝试了所有编码格式")
+        raise ValueError(f"无法读取文件 {self.data_path}")
     
     def clean_text(self, text: str) -> str:
         if pd.isna(text) or not isinstance(text, str):

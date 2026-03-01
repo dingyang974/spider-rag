@@ -1,5 +1,5 @@
 {
   "dimension": 768,
   "embedding_model": "tfidf",
-  "total_documents": 21833
+  "total_documents": 19909
 }
