@@ -10,6 +10,7 @@ from typing import List, Dict, Optional
 from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
 import jieba
+import jieba.analyse
 from loguru import logger
 
 st.set_page_config(
