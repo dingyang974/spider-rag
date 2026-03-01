@@ -1,34 +1,9 @@
-# Web Framework
-fastapi==0.109.0
-uvicorn==0.27.0
 streamlit==1.31.0
-
-# Data Processing
 pandas==2.2.0
 numpy==1.26.3
-
-# NLP & ML
-jieba==0.42.1
-scikit-learn==1.4.0
-transformers==4.37.2
-torch==2.2.0
-
-# RAG & Vector Store
-faiss-cpu==1.7.4
-sentence-transformers==2.3.1
-openai==1.12.0
-
-# Visualization
 plotly==5.18.0
-matplotlib==3.8.2
-
-# Utilities
-python-dotenv==1.0.1
-pydantic==2.6.0
-pydantic-settings==2.1.0
-tqdm==4.66.1
+faiss-cpu==1.7.4
+scikit-learn==1.4.0
+jieba==0.42.1
+openai==1.12.0
 loguru==0.7.2
-
-# API
-httpx==0.26.0
-aiohttp==3.9.1
