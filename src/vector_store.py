@@ -6,11 +6,10 @@ import numpy as np
 import pandas as pd
 import faiss
 from loguru import logger
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import jieba
 from config import settings
-
-os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
-
-from sentence_transformers import SentenceTransformer
 
 
 class VectorStore:
@@ -18,43 +17,55 @@ class VectorStore:
     def __init__(self, 
                  dimension: int = None,
                  embedding_model: str = None):
-        self.embedding_model_name = embedding_model or "shibing624/text2vec-base-chinese"
-        logger.info(f"Loading embedding model: {self.embedding_model_name}")
-        logger.info("Using HF mirror: https://hf-mirror.com")
-        self.model = SentenceTransformer(self.embedding_model_name)
-        self.dimension = dimension or self.model.get_sentence_embedding_dimension()
+        self.dimension = dimension or 768
+        self.vectorizer: Optional[TfidfVectorizer] = None
         self.index: Optional[faiss.IndexFlatIP] = None
         self.documents: List[Dict] = []
+        logger.info("Using TF-IDF based vector store (no model download required)")
+    
+    def tokenize_chinese(self, text: str) -> str:
+        if not text or not isinstance(text, str):
+            return ""
+        words = jieba.cut(text)
+        return " ".join(words)
+    
+    def get_embeddings_batch(self, texts: List[str]) -> np.ndarray:
+        logger.info(f"Encoding {len(texts)} texts with TF-IDF...")
+        
+        tokenized_texts = [self.tokenize_chinese(text) for text in texts]
+        
+        if self.vectorizer is None:
+            self.vectorizer = TfidfVectorizer(
+                max_features=self.dimension,
+                min_df=1,
+                max_df=0.95,
+                ngram_range=(1, 2)
+            )
+            tfidf_matrix = self.vectorizer.fit_transform(tokenized_texts)
+        else:
+            tfidf_matrix = self.vectorizer.transform(tokenized_texts)
+        
+        dense_matrix = tfidf_matrix.toarray().astype(np.float32)
+        
+        norms = np.linalg.norm(dense_matrix, axis=1, keepdims=True)
+        norms[norms == 0] = 1
+        dense_matrix = dense_matrix / norms
+        
+        return dense_matrix
     
     def get_embedding(self, text: str) -> np.ndarray:
         if not text or not isinstance(text, str):
             return np.zeros(self.dimension, dtype=np.float32)
         
-        try:
-            embedding = self.model.encode(text[:512], convert_to_numpy=True)
-            return embedding.astype(np.float32)
-        except Exception as e:
-            logger.error(f"Error getting embedding: {e}")
-            return np.zeros(self.dimension, dtype=np.float32)
-    
-    def get_embeddings_batch(self, texts: List[str], batch_size: int = 64) -> np.ndarray:
-        logger.info(f"Encoding {len(texts)} texts with local model...")
+        tokenized = self.tokenize_chinese(text)
+        tfidf_vec = self.vectorizer.transform([tokenized])
+        embedding = tfidf_vec.toarray().astype(np.float32)[0]
         
-        valid_texts = []
-        for text in texts:
-            if text and isinstance(text, str):
-                valid_texts.append(text[:512])
-            else:
-                valid_texts.append("")
+        norm = np.linalg.norm(embedding)
+        if norm > 0:
+            embedding = embedding / norm
         
-        embeddings = self.model.encode(
-            valid_texts,
-            batch_size=batch_size,
-            show_progress_bar=True,
-            convert_to_numpy=True
-        )
-        
-        return embeddings.astype(np.float32)
+        return embedding
     
     def build_index(self, df: pd.DataFrame, text_column: str = 'content') -> None:
         logger.info(f"Building vector index for {len(df)} documents...")
@@ -77,14 +88,12 @@ class VectorStore:
             texts.append(doc["content"])
         
         embeddings = self.get_embeddings_batch(texts)
-        
-        embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
-        embeddings = np.nan_to_num(embeddings)
+        self.dimension = embeddings.shape[1]
         
         self.index = faiss.IndexFlatIP(self.dimension)
         self.index.add(embeddings)
         
-        logger.info(f"Vector index built with {self.index.ntotal} vectors")
+        logger.info(f"Vector index built with {self.index.ntotal} vectors, dimension: {self.dimension}")
     
     def search(self, 
                query: str, 
@@ -99,8 +108,7 @@ class VectorStore:
         top_k = top_k or settings.TOP_K_RETRIEVAL
         
         query_embedding = self.get_embedding(query)
-        query_embedding = query_embedding / np.linalg.norm(query_embedding)
-        query_embedding = query_embedding.reshape(1, -1)
+        query_embedding = query_embedding.reshape(1, -1).astype(np.float32)
         
         scores, indices = self.index.search(query_embedding, min(top_k * 3, len(self.documents)))
         
@@ -135,10 +143,13 @@ class VectorStore:
         with open(os.path.join(path, "documents.pkl"), 'wb') as f:
             pickle.dump(self.documents, f)
         
+        with open(os.path.join(path, "vectorizer.pkl"), 'wb') as f:
+            pickle.dump(self.vectorizer, f)
+        
         with open(os.path.join(path, "metadata.json"), 'w', encoding='utf-8') as f:
             json.dump({
                 "dimension": self.dimension,
-                "embedding_model": self.embedding_model_name,
+                "embedding_model": "tfidf",
                 "total_documents": len(self.documents)
             }, f, ensure_ascii=False, indent=2)
         
@@ -149,12 +160,18 @@ class VectorStore:
         
         index_path = os.path.join(path, "index.faiss")
         docs_path = os.path.join(path, "documents.pkl")
+        vectorizer_path = os.path.join(path, "vectorizer.pkl")
         
         if os.path.exists(index_path) and os.path.exists(docs_path):
             self.index = faiss.read_index(index_path)
+            self.dimension = self.index.d
             
             with open(docs_path, 'rb') as f:
                 self.documents = pickle.load(f)
+            
+            if os.path.exists(vectorizer_path):
+                with open(vectorizer_path, 'rb') as f:
+                    self.vectorizer = pickle.load(f)
             
             logger.info(f"Vector store loaded: {len(self.documents)} documents")
         else:
@@ -164,6 +181,6 @@ class VectorStore:
         return {
             "total_documents": len(self.documents),
             "dimension": self.dimension,
-            "embedding_model": self.embedding_model_name,
+            "embedding_model": "tfidf",
             "index_built": self.index is not None
         }

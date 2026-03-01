@@ -8,12 +8,9 @@ import pickle
 import faiss
 from typing import List, Dict, Optional
 from openai import OpenAI
-from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
 import jieba
-import jieba.analyse
 from loguru import logger
-
-os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com'
 
 st.set_page_config(
     page_title="生育议题舆情智能分析与决策助手",
@@ -47,21 +44,21 @@ st.markdown("""
 
 
 @st.cache_resource
-def load_embedding_model():
-    return SentenceTransformer("shibing624/text2vec-base-chinese")
-
-
-@st.cache_resource
 def load_vector_store():
     index_path = "./vector_store/index.faiss"
     docs_path = "./vector_store/documents.pkl"
+    vectorizer_path = "./vector_store/vectorizer.pkl"
     
     if os.path.exists(index_path) and os.path.exists(docs_path):
         index = faiss.read_index(index_path)
         with open(docs_path, 'rb') as f:
             documents = pickle.load(f)
-        return index, documents
-    return None, None
+        vectorizer = None
+        if os.path.exists(vectorizer_path):
+            with open(vectorizer_path, 'rb') as f:
+                vectorizer = pickle.load(f)
+        return index, documents, vectorizer
+    return None, None, None
 
 
 @st.cache_resource
@@ -83,15 +80,26 @@ def get_openai_client():
     return OpenAI(api_key=api_key, base_url=base_url), base_url, model
 
 
-def search_similar_docs(query: str, index, documents: List[Dict], model, top_k: int = 10):
-    if index is None or not documents:
+def tokenize_chinese(text: str) -> str:
+    if not text or not isinstance(text, str):
+        return ""
+    words = jieba.cut(text)
+    return " ".join(words)
+
+
+def search_similar_docs(query: str, index, documents: List[Dict], vectorizer, top_k: int = 10):
+    if index is None or not documents or vectorizer is None:
         return []
     
-    query_embedding = model.encode(query[:512], convert_to_numpy=True)
-    query_embedding = query_embedding / np.linalg.norm(query_embedding)
-    query_embedding = query_embedding.reshape(1, -1).astype(np.float32)
+    tokenized_query = tokenize_chinese(query)
+    query_vec = vectorizer.transform([tokenized_query])
+    query_embedding = query_vec.toarray().astype(np.float32)
     
-    scores, indices = index.search(query_embedding, min(top_k * 2, len(documents)))
+    norm = np.linalg.norm(query_embedding)
+    if norm > 0:
+        query_embedding = query_embedding / norm
+    
+    scores, indices = index.search(query_embedding.reshape(1, -1), min(top_k * 2, len(documents)))
     
     results = []
     for score, idx in zip(scores[0], indices[0]):
@@ -239,7 +247,7 @@ def render_overview_page(df):
             st.info("暂无关键词数据")
 
 
-def render_qa_page(index, documents, model):
+def render_qa_page(index, documents, vectorizer):
     st.markdown('<h1 class="main-header">💬 智能问答</h1>', unsafe_allow_html=True)
     
     client, base_url, llm_model = get_openai_client()
@@ -299,7 +307,7 @@ def render_qa_page(index, documents, model):
         if st.button("发送问题", type="primary", use_container_width=True):
             if question.strip():
                 with st.spinner("正在分析..."):
-                    retrieved_docs = search_similar_docs(question, index, documents, model, top_k)
+                    retrieved_docs = search_similar_docs(question, index, documents, vectorizer, top_k)
                     answer = generate_response(client, llm_model, question, retrieved_docs)
                     
                     st.session_state.chat_history.append({
@@ -334,7 +342,7 @@ def render_qa_page(index, documents, model):
         with cols[i % 2]:
             if st.button(q, key=f"quick_{i}", use_container_width=True):
                 with st.spinner("正在分析..."):
-                    retrieved_docs = search_similar_docs(q, index, documents, model, top_k)
+                    retrieved_docs = search_similar_docs(q, index, documents, vectorizer, top_k)
                     answer = generate_response(client, llm_model, q, retrieved_docs)
                     
                     st.session_state.chat_history.append({
@@ -441,9 +449,8 @@ def main():
     st.sidebar.markdown("---")
     
     with st.spinner("正在加载数据..."):
-        index, documents = load_vector_store()
+        index, documents, vectorizer = load_vector_store()
         df = load_processed_data()
-        embedding_model = load_embedding_model()
     
     if index is not None:
         st.sidebar.success(f"✅ 已加载 {len(documents)} 条数据")
@@ -453,7 +460,7 @@ def main():
     if "📈 舆情总览" in page:
         render_overview_page(df)
     elif "💬 智能问答" in page:
-        render_qa_page(index, documents, embedding_model)
+        render_qa_page(index, documents, vectorizer)
     elif "📝 评论浏览" in page:
         render_comments_page(df)
 
