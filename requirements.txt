@@ -2,6 +2,9 @@ streamlit
 pandas
 numpy
 plotly
+fastapi
+uvicorn[standard]
+pydantic-settings
 faiss-cpu
 scikit-learn
 jieba

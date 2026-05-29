@@ -66,3 +66,6 @@ venv.bak/
 # Logs
 logs/
 *.log
+
+# Streamlit local secrets
+.streamlit/secrets.toml

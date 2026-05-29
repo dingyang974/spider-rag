@@ -1,637 +1,1713 @@
-import streamlit as st
-import requests
+import os
+from typing import Dict, List, Optional
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from typing import Dict, List, Optional
-import os
-import sys
+import requests
+import streamlit as st
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-API_BASE_URL = "http://localhost:8000"
+DEFAULT_API_BASE_URL = "http://localhost:8000"
 
 st.set_page_config(
-    page_title="生育议题舆情智能分析与决策助手",
-    page_icon="📊",
+    page_title="InsightOps 企业市场情报 Agent",
+    page_icon="🔎",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-st.markdown("""
+
+def get_runtime_setting(key: str, default: str) -> str:
+    env_value = os.getenv(key)
+    if env_value:
+        return env_value
+
+    secrets_paths = [
+        os.path.join(os.path.expanduser("~"), ".streamlit", "secrets.toml"),
+        os.path.join(os.getcwd(), ".streamlit", "secrets.toml"),
+    ]
+    if not any(os.path.exists(path) for path in secrets_paths):
+        return default
+
+    try:
+        value = st.secrets.get(key)
+    except Exception:
+        value = None
+    return value or default
+
+
+API_BASE_URL = get_runtime_setting("API_BASE_URL", DEFAULT_API_BASE_URL).rstrip("/")
+
+
+DEFAULT_WORK_VIEW = "品牌运营"
+
+
+ROLE_VIEWS: Dict[str, Dict] = {
+    "品牌运营": {
+        "subtitle": "统筹品牌声量、监测项目、跨团队处置和情报交付。",
+        "metrics": [
+            ("全网声量", "124,800", "+18.4%", "up"),
+            ("待研判信号", "18", "+5", "warn"),
+            ("跨团队事项", "6", "3 项需分派", "warn"),
+            ("本周报告", "6", "已交付 4", "ok"),
+        ],
+        "focus": ["确认广告争议是否升级", "查看竞品 A 新品声量", "安排今日市场情报日报"],
+        "agent_queue": [
+            ("广告争议是否升级为跨团队事件", "待确认负责人", "R-024"),
+            ("竞品 A 新品声量异常", "证据汇总中", "C-118"),
+            ("售后响应问题是否影响品牌口碑", "待人工确认", "R-021"),
+            ("春季上新活动复盘结论", "报告生成中", "M-047"),
+        ],
+        "agent_output": "市场情报日报、跨团队分派清单、今日重点观察项",
+        "risk_lens": "品牌运营视角优先判断影响面、负责人和升级机制，重点看事件是否需要跨团队协同处置。",
+        "risk_actions": ["分派负责人", "加入今日风险简报", "创建跨团队跟进", "追踪 48 小时扩散"],
+        "competitor_focus": "关注竞品变化是否影响本品牌声量结构，并把风险、机会和待跟进事项同步到日报。",
+        "report_defaults": {
+            "type": "市场情报日报",
+            "audience": "品牌运营负责人",
+            "modules": ["关键结论", "风险事件", "竞品变化", "建议动作"],
+        },
+        "copilot_commands": [
+            {
+                "button": "生成日报",
+                "title": "生成日报",
+                "desc": "汇总今日市场情报",
+                "icon": "D",
+                "answer": "已生成市场情报日报草稿：今日重点为广告争议风险、竞品 A 新品声量上升和售后响应讨论。建议品牌运营先分派风险负责人，再把竞品观察同步给竞品策略团队。",
+            },
+            {
+                "button": "分派任务",
+                "title": "任务分派",
+                "desc": "把信号转为负责人动作",
+                "icon": "T",
+                "answer": "建议分派：公关风控负责广告争议回应口径，营销增长复盘素材承诺表达，竞品策略补充竞品 A 对比证据，品牌运营在今日日报中跟踪闭环状态。",
+            },
+            {
+                "button": "整理重点",
+                "title": "重点提炼",
+                "desc": "提炼三条管理摘要",
+                "icon": "S",
+                "answer": "今日三条重点：一是广告文案争议已形成高赞负评，二是竞品 A 新品带动价格对比，三是售后响应慢仍在积累负面体验。建议优先处理第一项。",
+            },
+            {
+                "button": "加入简报",
+                "title": "报告沉淀",
+                "desc": "写入今日情报简报",
+                "icon": "R",
+                "answer": "已生成简报段落：今日品牌口碑主要受广告承诺和价格感知影响，需在 48 小时内观察负面扩散，并同步竞品对比讨论给竞品策略团队。",
+            },
+        ],
+    },
+    "公关风控": {
+        "subtitle": "负责风险事件、高赞负评、证据链、回应口径和升级判断。",
+        "metrics": [
+            ("高危舆情", "3", "需 2 小时内处理", "bad"),
+            ("高赞负评", "24", "+9", "warn"),
+            ("核心平台", "小红书", "负面集中", "bad"),
+            ("回应口径", "5", "待审核 2", "ok"),
+        ],
+        "focus": ["处理价格争议事件", "审核客服统一回复", "追踪中腰部 KOL 扩散"],
+        "agent_queue": [
+            ("广告争议归因与事实边界", "已完成", "R-024"),
+            ("高赞负评证据链整理", "证据汇总中", "E-203"),
+            ("中腰部 KOL 二次扩散判断", "待人工确认", "R-029"),
+            ("客服回应口径一致性检查", "待审核", "S-014"),
+        ],
+        "agent_output": "回应口径、证据摘要、升级建议、客服 FAQ 更新",
+        "risk_lens": "公关风控视角优先判断事实边界、传播速度和回应窗口，重点看是否会从用户吐槽升级为媒体议题。",
+        "risk_actions": ["生成回应口径", "整理证据摘要", "标记高赞负评", "同步客服 FAQ"],
+        "competitor_focus": "关注竞品对比是否加剧负面情绪，优先提取可公开回应的事实点，避免陷入无依据对比。",
+        "report_defaults": {
+            "type": "风险事件简报",
+            "audience": "公关风控负责人",
+            "modules": ["风险事件", "证据评论", "建议动作", "下周观察点"],
+        },
+        "copilot_commands": [
+            {
+                "button": "生成回应口径",
+                "title": "回应口径",
+                "desc": "生成对外回应草稿",
+                "icon": "P",
+                "answer": "建议回应口径：感谢用户反馈，我们已关注到大家对新品价格和实际体验的讨论。新品定价综合考虑研发、服务和长期使用成本，后续会补充更清晰的功能说明与真实使用场景，也欢迎继续反馈具体体验。",
+            },
+            {
+                "button": "解释风险原因",
+                "title": "风险归因",
+                "desc": "解释风险为什么升高",
+                "icon": "R",
+                "answer": "该事件被判定为高风险，核心原因是负面增长速度快、高赞评论集中，且讨论已经从价格吐槽扩散到广告承诺与竞品对比。建议先确认事实性表述是否过强，再统一公关与客服口径。",
+            },
+            {
+                "button": "整理证据摘要",
+                "title": "证据整理",
+                "desc": "汇总关键评论来源",
+                "icon": "E",
+                "answer": "证据摘要：当前共识别 126 条相关评论，其中高赞负评 18 条。主要集中在小红书和微博，关键词包括价格虚高、广告说太满、竞品更划算。传播路径暂未进入媒体报道，但已出现中腰部账号二次讨论。",
+            },
+            {
+                "button": "生成客服 FAQ",
+                "title": "客服 FAQ",
+                "desc": "转为一线回应材料",
+                "icon": "F",
+                "answer": "客服 FAQ 建议补充三类问题：新品定价逻辑、广告承诺的适用条件、与竞品对比时的真实差异。回复中避免绝对化承诺，并引导用户描述具体使用场景。",
+            },
+        ],
+    },
+    "营销增长": {
+        "subtitle": "负责活动反馈、广告素材、用户反感点、投放优化和复盘沉淀。",
+        "metrics": [
+            ("活动提及", "38,420", "+26.1%", "up"),
+            ("素材争议点", "7", "+3", "warn"),
+            ("正向卖点", "12", "可复用", "ok"),
+            ("待复盘活动", "2", "本周截止", "warn"),
+        ],
+        "focus": ["复盘春季上新 campaign", "定位短视频评论反感点", "生成素材优化建议"],
+        "agent_queue": [
+            ("春季上新活动评论复盘", "报告生成中", "M-047"),
+            ("短视频素材反感点聚类", "证据汇总中", "A-066"),
+            ("正向卖点可复用清单", "待人工确认", "M-052"),
+            ("达人笔记转化反馈对比", "分析中", "K-031"),
+        ],
+        "agent_output": "活动复盘、素材优化建议、用户反感点清单、下一轮投放假设",
+        "risk_lens": "营销增长视角优先判断争议是否来自素材表达、卖点承诺或投放人群错配，重点反推下一轮投放如何改。",
+        "risk_actions": ["定位反感点", "生成素材优化建议", "标记不可复用表达", "加入活动复盘"],
+        "competitor_focus": "关注竞品素材、达人测评和促销表达中哪些内容带来有效声量，可转化为下一轮投放假设。",
+        "report_defaults": {
+            "type": "营销活动复盘",
+            "audience": "营销增长负责人",
+            "modules": ["关键结论", "证据评论", "建议动作", "下周观察点"],
+        },
+        "copilot_commands": [
+            {
+                "button": "生成活动复盘",
+                "title": "活动复盘",
+                "desc": "沉淀投放表现与反馈",
+                "icon": "M",
+                "answer": "活动复盘草稿：春季上新 campaign 带来明显声量增长，但争议集中在广告承诺表达过满和价格感知落差。下一轮素材建议弱化绝对效果承诺，增加真实使用场景和对比解释。",
+            },
+            {
+                "button": "提取反感点",
+                "title": "反感点",
+                "desc": "找出用户排斥表达",
+                "icon": "N",
+                "answer": "当前反感点主要包括：效果表达太绝对、价格解释不足、达人笔记像硬广、使用场景不够真实。建议将素材拆成真实体验、适用人群和长期成本三组验证。",
+            },
+            {
+                "button": "生成素材建议",
+                "title": "素材建议",
+                "desc": "输出下一轮投放方向",
+                "icon": "A",
+                "answer": "素材优化建议：优先使用真实用户场景、降低夸张承诺、增加价格构成解释，并把竞品 A 的场景化表达作为参考，但避免直接跟随其价格叙事。",
+            },
+            {
+                "button": "筛选可复用卖点",
+                "title": "卖点筛选",
+                "desc": "提炼正向评论资产",
+                "icon": "G",
+                "answer": "可复用卖点包括：包装设计、入门门槛低、售后响应快和长期使用成本可控。建议把这些卖点放进下一轮短视频脚本和达人 brief。",
+            },
+        ],
+    },
+    "竞品策略": {
+        "subtitle": "负责竞品动态、市场机会、销售话术、对比洞察和策略资产。",
+        "metrics": [
+            ("竞品提及", "18,420", "+31.2%", "up"),
+            ("机会线索", "42", "新增 11", "ok"),
+            ("用户痛点", "9", "高频 4", "warn"),
+            ("话术包", "3", "待更新", "ok"),
+        ],
+        "focus": ["提取竞品 A 用户吐槽", "生成门店销售话术", "比较价格敏感人群反馈"],
+        "agent_queue": [
+            ("竞品 A 新品价格与套餐对比", "证据汇总中", "C-118"),
+            ("竞品 B 质量吐槽机会点", "待人工确认", "C-082"),
+            ("价格敏感人群反馈提取", "分析中", "S-049"),
+            ("门店销售话术包更新", "待生成", "S-061"),
+        ],
+        "agent_output": "竞品对比卡、销售话术、机会线索、用户痛点清单",
+        "risk_lens": "竞品策略视角优先判断负面讨论能否转化为对比机会，重点看竞品优势是否正在重塑用户决策标准。",
+        "risk_actions": ["生成竞品对比卡", "更新销售话术", "提取机会线索", "加入竞品周报"],
+        "competitor_focus": "重点展示竞品变化带来的销售机会：哪些用户痛点可被本品牌承接，哪些对比点需要补充证据和话术。",
+        "report_defaults": {
+            "type": "竞品追踪周报",
+            "audience": "竞品策略负责人",
+            "modules": ["关键结论", "竞品变化", "证据评论", "建议动作"],
+        },
+        "copilot_commands": [
+            {
+                "button": "生成竞品话术",
+                "title": "销售话术",
+                "desc": "生成一线对比话术",
+                "icon": "S",
+                "answer": "销售话术草稿：如果用户提到竞品 A 套餐更完整，可强调本品牌上手门槛低、售后响应快和长期使用成本更清楚；同时用真实用户评价解释核心功能差异，避免只做价格对比。",
+            },
+            {
+                "button": "提取机会线索",
+                "title": "机会线索",
+                "desc": "识别可跟进客群",
+                "icon": "O",
+                "answer": "当前机会线索集中在三类用户：对竞品价格敏感的人、担心质量稳定性的人、希望看到真实横评的人。建议销售团队优先准备价格解释和真实案例材料。",
+            },
+            {
+                "button": "生成对比卡",
+                "title": "竞品对比",
+                "desc": "生成横向对比卡",
+                "icon": "C",
+                "answer": "竞品对比卡建议包含：价格与套餐、适用场景、售后响应、真实口碑和长期成本五个维度。竞品 A 胜在场景表达，本品牌可主打上手简单和服务稳定。",
+            },
+            {
+                "button": "写入竞品周报",
+                "title": "周报沉淀",
+                "desc": "写入竞品追踪周报",
+                "icon": "W",
+                "answer": "已生成竞品周报段落：竞品 A 新品发布带动价格与套餐讨论，本品牌需补强场景解释和销售话术；竞品 B 促销带来质量吐槽，可作为稳定性对比机会。",
+            },
+        ],
+    },
+}
+
+
+MONITOR_PROJECTS: List[Dict] = [
+    {
+        "name": "品牌口碑监测",
+        "owner": "品牌运营",
+        "status": "运行中",
+        "coverage": "小红书 / 抖音 / 微博 / 电商评价",
+        "signals": 8,
+        "description": "监测品牌词、产品词、核心卖点与用户反馈变化。",
+    },
+    {
+        "name": "竞品动态监测",
+        "owner": "竞品策略",
+        "status": "运行中",
+        "coverage": "竞品 A / 竞品 B / 竞品 C",
+        "signals": 5,
+        "description": "追踪竞品新品、活动、价格讨论和用户吐槽。",
+    },
+    {
+        "name": "春季上新活动复盘",
+        "owner": "营销增长",
+        "status": "研判中",
+        "coverage": "活动话题 / 投放素材 / 达人笔记",
+        "signals": 4,
+        "description": "评估活动声量、素材接受度、用户反感点和复用卖点。",
+    },
+    {
+        "name": "风险关键词监测",
+        "owner": "公关风控",
+        "status": "预警中",
+        "coverage": "虚假宣传 / 价格虚高 / 质量翻车",
+        "signals": 6,
+        "description": "识别异常负面提及、高赞负评和潜在危机扩散。",
+    },
+]
+
+
+RISK_EVENTS: List[Dict] = [
+    {
+        "id": "R-024",
+        "level": "高",
+        "title": "广告文案引发价格争议",
+        "platform": "小红书 / 微博",
+        "trend": "负面提及 24 小时增长 168%",
+        "owner": "公关风控",
+        "status": "待确认升级",
+        "confidence": 82,
+        "summary": "用户集中质疑新品定价与广告承诺之间存在落差，高赞评论开始向竞品对比扩散。",
+        "drivers": {"价格感知落差": 42, "广告承诺过强": 28, "竞品对比": 17, "售后体验": 13},
+        "evidence": [
+            "价格比竞品贵一截，但宣传里的核心效果没有那么明显。",
+            "广告说得太满，实际体验更像常规升级版。",
+            "同价位我可能会考虑竞品 A，至少功能解释更清楚。",
+        ],
+        "actions": ["生成公关回应口径", "分派公关风控", "加入今日风险简报", "追踪 48 小时扩散"],
+    },
+    {
+        "id": "R-021",
+        "level": "中",
+        "title": "售后响应慢被连续提及",
+        "platform": "抖音 / 电商评价",
+        "trend": "相关评论连续 3 天上升",
+        "owner": "客户体验",
+        "status": "处理中",
+        "confidence": 74,
+        "summary": "用户对售后等待时间和问题一次性解决率不满，暂未形成跨平台大范围扩散。",
+        "drivers": {"响应慢": 51, "流程复杂": 23, "退换体验": 16, "客服口径不一致": 10},
+        "evidence": [
+            "客服回复很慢，等了一天还是让我重新提交材料。",
+            "问题不大，但流程太绕，体验被消耗完了。",
+            "不同客服说法不一样，不知道该听谁的。",
+        ],
+        "actions": ["同步客服主管", "生成 FAQ 更新建议", "抽样核查工单", "观察 7 日趋势"],
+    },
+    {
+        "id": "R-018",
+        "level": "中",
+        "title": "竞品新品带动对比讨论",
+        "platform": "小红书 / B站",
+        "trend": "竞品 A 提及增长 31%",
+        "owner": "竞品策略",
+        "status": "待生成话术",
+        "confidence": 79,
+        "summary": "竞品新品发布后，用户开始比较价格、功能解释和使用场景，本品牌卖点表达需要更明确。",
+        "drivers": {"功能对比": 36, "价格对比": 31, "场景解释": 21, "达人测评": 12},
+        "evidence": [
+            "竞品 A 这次把适用场景讲得更清楚。",
+            "两个产品差价不大，但 A 的套餐看起来更完整。",
+            "想看一个真实横评，官方图都太像广告了。",
+        ],
+        "actions": ["生成竞品对比卡", "更新销售话术", "收集达人横评", "加入竞品周报"],
+    },
+]
+
+
+COMPETITORS: List[Dict] = [
+    {
+        "name": "竞品 A",
+        "share": 34,
+        "sentiment": 68,
+        "change": "+31%",
+        "signal": "新品发布后声量快速上升，用户关注价格与套装完整度。",
+        "opportunity": "强调本品牌使用门槛低、售后响应快和长期成本优势。",
+    },
+    {
+        "name": "竞品 B",
+        "share": 22,
+        "sentiment": 55,
+        "change": "+8%",
+        "signal": "促销活动带来短期声量，但质量吐槽同步增加。",
+        "opportunity": "在销售话术中对比稳定性与真实用户评价。",
+    },
+    {
+        "name": "竞品 C",
+        "share": 14,
+        "sentiment": 61,
+        "change": "-4%",
+        "signal": "近期讨论下降，用户主要关注设计风格与包装。",
+        "opportunity": "可吸收其视觉表达优点，但不宜直接跟随价格策略。",
+    },
+]
+
+
+REPORTS: List[Dict] = [
+    {"name": "市场情报日报", "type": "日报", "status": "已生成", "owner": "品牌运营", "updated": "今日 09:30"},
+    {"name": "广告争议风险简报", "type": "风险", "status": "待审核", "owner": "公关风控", "updated": "今日 10:15"},
+    {"name": "竞品 A 新品追踪", "type": "竞品", "status": "生成中", "owner": "竞品策略", "updated": "今日 11:05"},
+    {"name": "春季上新活动复盘", "type": "活动", "status": "待补充证据", "owner": "营销增长", "updated": "昨日 18:40"},
+]
+
+
+def inject_styles() -> None:
+    st.markdown(
+        """
 <style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #1f77b4;
-        text-align: center;
-        margin-bottom: 2rem;
+    html, body, .stApp, [data-testid="stAppViewContainer"] {
+        min-height: 100vh !important;
+    }
+    :root {
+        --bg: #f8fafc;
+        --panel: #ffffff;
+        --ink: #0f172a;
+        --muted: #64748b;
+        --soft: #f1f5f9;
+        --line: #e2e8f0;
+        --line-strong: #cbd5e1;
+        --blue: #2563eb;
+        --blue-soft: #eff6ff;
+        --teal: #14b8a6;
+        --teal-soft: #ecfdf5;
+        --red: #ef4444;
+        --red-soft: #fef2f2;
+        --amber: #f59e0b;
+        --amber-soft: #fffbeb;
+        --green: #10b981;
+        --green-soft: #ecfdf5;
+        --purple: #8b5cf6;
+    }
+    .stApp {
+        background: var(--bg);
+        color: var(--ink);
+    }
+    header[data-testid="stHeader"] {
+        visibility: hidden;
+        height: 0;
+    }
+    section[data-testid="stSidebar"] {
+        background: #ffffff;
+        border-right: 1px solid var(--line);
+        box-shadow: 8px 0 28px rgba(15, 23, 42, 0.03);
+        width: 224px !important;
+        min-width: 224px !important;
+    }
+    section[data-testid="stSidebar"] > div {
+        width: 224px !important;
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+    }
+    section[data-testid="stSidebar"] * {
+        color: var(--ink);
+    }
+    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+    section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] li,
+    section[data-testid="stSidebar"] label {
+        color: #475569;
+    }
+    section[data-testid="stSidebar"] hr {
+        border-color: var(--line);
+    }
+    section[data-testid="stSidebar"] [role="radiogroup"] label {
+        border-radius: 8px;
+        padding: 0.45rem 0.55rem;
+        margin: 0.1rem 0;
+        border: 1px solid transparent;
+    }
+    section[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) {
+        background: var(--blue-soft);
+        border-left: 3px solid var(--blue);
+        color: var(--blue);
+    }
+    .block-container {
+        padding-top: 0.7rem;
+        padding-bottom: 2rem;
+        max-width: 1500px;
+    }
+    h1, h2, h3 {
+        letter-spacing: 0;
+    }
+    div[data-testid="stVerticalBlock"] {
+        gap: 0.75rem;
+    }
+    .app-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 0.95rem;
+        margin-bottom: 1rem;
+    }
+    .eyebrow {
+        color: var(--blue);
+        font-size: 0.78rem;
+        font-weight: 700;
+        margin-bottom: 0.35rem;
+    }
+    .title {
+        font-size: 1.46rem;
+        line-height: 1.2;
+        font-weight: 760;
+        color: var(--ink);
+        margin: 0;
+    }
+    .subtitle {
+        color: var(--muted);
+        font-size: 0.92rem;
+        margin-top: 0.35rem;
+    }
+    .toolbar {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+    }
+    .chip {
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 999px;
+        padding: 0.42rem 0.72rem;
+        color: var(--muted);
+        font-size: 0.78rem;
+        white-space: nowrap;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+    .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 1rem;
+        min-height: 100%;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .panel-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+        gap: 0.5rem;
+    }
+    .panel-title strong {
+        font-size: 0.95rem;
+        color: var(--ink);
+    }
+    .panel-title span {
+        font-size: 0.78rem;
+        color: var(--muted);
     }
     .metric-card {
-        background-color: #f0f2f6;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.95rem 1rem;
+        min-height: 118px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .metric-label {
+        color: var(--muted);
+        font-size: 0.78rem;
+        margin-bottom: 0.58rem;
+    }
+    .metric-value {
+        color: var(--ink);
+        font-weight: 760;
+        font-size: 1.5rem;
+        line-height: 1.1;
+        margin-bottom: 0.7rem;
+    }
+    .metric-delta {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.2rem 0.45rem;
+        font-size: 0.72rem;
+        font-weight: 650;
+    }
+    .delta-up { background: var(--green-soft); color: #047857; }
+    .delta-ok { background: var(--blue-soft); color: var(--blue); }
+    .delta-warn { background: var(--amber-soft); color: #b45309; }
+    .delta-bad { background: var(--red-soft); color: #dc2626; }
+    .signal-card {
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        padding: 0.78rem 0.85rem;
+        margin-bottom: 0.56rem;
+        background: #fff;
+        box-shadow: 0 1px 1px rgba(15, 23, 42, 0.02);
+    }
+    .signal-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.6rem;
+        margin-bottom: 0.35rem;
+    }
+    .signal-title {
+        color: var(--ink);
+        font-weight: 700;
+        font-size: 0.9rem;
+    }
+    .signal-meta {
+        color: var(--muted);
+        font-size: 0.76rem;
+        line-height: 1.55;
+    }
+    .tag {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.18rem 0.48rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .tag-high { background: var(--red-soft); color: #dc2626; }
+    .tag-mid { background: var(--amber-soft); color: #b45309; }
+    .tag-low { background: var(--blue-soft); color: var(--blue); }
+    .tag-run { background: var(--green-soft); color: #047857; }
+    .workflow {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0.7rem;
+        margin: 0.5rem 0 1rem 0;
+    }
+    .workflow-step {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.75rem;
+        min-height: 88px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+    .workflow-step strong {
+        display: block;
+        color: var(--ink);
+        font-size: 0.84rem;
+        margin-bottom: 0.3rem;
+    }
+    .workflow-step span {
+        color: var(--muted);
+        font-size: 0.74rem;
+        line-height: 1.4;
+    }
+    .evidence {
+        border-left: 3px solid var(--teal);
+        padding: 0.55rem 0.65rem;
+        margin-bottom: 0.45rem;
+        background: #f8fafc;
+        color: var(--ink);
+        font-size: 0.82rem;
+        line-height: 1.55;
+        border-radius: 0 8px 8px 0;
+    }
+    .copilot-box {
+        background: #fff;
         border-radius: 10px;
         padding: 1rem;
-        margin: 0.5rem 0;
+        color: var(--ink);
+        border: 1px solid var(--line);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
     }
-    .chat-message {
-        padding: 1rem;
+    .copilot-box strong {
+        color: var(--ink);
+    }
+    .copilot-box p {
+        color: var(--muted);
+        font-size: 0.82rem;
+        line-height: 1.55;
+    }
+    .copilot-card {
+        display: flex;
+        gap: 0.7rem;
+        align-items: flex-start;
+        border: 1px solid var(--line);
         border-radius: 10px;
-        margin: 0.5rem 0;
+        padding: 0.75rem;
+        background: #fff;
+        margin-bottom: 0.65rem;
     }
-    .user-message {
-        background-color: #e3f2fd;
+    .copilot-icon {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 9px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--blue-soft);
+        color: var(--blue);
+        font-weight: 760;
+        flex: 0 0 auto;
     }
-    .assistant-message {
-        background-color: #f5f5f5;
+    .copilot-card strong {
+        display: block;
+        color: var(--ink);
+        font-size: 0.85rem;
+        margin-bottom: 0.18rem;
+    }
+    .copilot-card span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.75rem;
+        line-height: 1.4;
+    }
+    .answer-box {
+        border: 1px solid #c7d7fe;
+        background: #f7faff;
+        border-radius: 10px;
+        padding: 0.85rem;
+        color: var(--ink);
+        font-size: 0.88rem;
+        line-height: 1.65;
+        margin-top: 0.75rem;
+    }
+    .small-note {
+        color: var(--muted);
+        font-size: 0.76rem;
+        line-height: 1.5;
+    }
+    div[data-testid="stRadio"] > label {
+        color: var(--muted);
+        font-size: 0.8rem;
+    }
+    div[data-testid="stRadio"] [role="radiogroup"] {
+        gap: 0.45rem;
+    }
+    div[data-testid="stRadio"] input[type="radio"] {
+        opacity: 0;
+        width: 0;
+        height: 0;
+        margin: 0;
+        position: absolute;
+    }
+    div[data-testid="stRadio"] [role="radiogroup"] label {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.35rem 0.6rem;
+        min-height: 2.15rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+        justify-content: center;
+    }
+    div[data-testid="stRadio"] [role="radiogroup"] label > div:first-child {
+        display: none;
+    }
+    div[data-testid="stRadio"] [role="radiogroup"] label p {
+        color: var(--ink) !important;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    div[data-testid="stRadio"] [role="radiogroup"] label,
+    div[data-testid="stRadio"] [role="radiogroup"] label div,
+    div[data-testid="stRadio"] [role="radiogroup"] label span {
+        color: var(--ink) !important;
+    }
+    div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {
+        background: var(--blue);
+        border-color: var(--blue);
+    }
+    div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked),
+    div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) *,
+    div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) p {
+        color: #fff !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label {
+        justify-content: flex-start;
+        box-shadow: none;
+        width: 100%;
+        min-height: 2.25rem;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) {
+        background: var(--blue);
+        border-color: var(--blue);
+        border-left-color: var(--blue);
+        color: #fff !important;
+    }
+    section[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label:has(input:checked) * {
+        color: #fff !important;
+    }
+    div[data-testid="stMetric"] {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.75rem;
+    }
+    div[data-testid="stMetric"] label,
+    div[data-testid="stMetric"] [data-testid="stMetricLabel"],
+    div[data-testid="stMetric"] [data-testid="stMetricLabel"] *,
+    div[data-testid="stMetric"] [data-testid="stMetricValue"],
+    div[data-testid="stMetric"] [data-testid="stMetricValue"] * {
+        color: var(--ink) !important;
+    }
+    div[data-testid="stMetric"] [data-testid="stMetricLabel"],
+    div[data-testid="stMetric"] [data-testid="stMetricLabel"] * {
+        color: var(--muted) !important;
+    }
+    div[data-testid="stTextInput"] label,
+    div[data-testid="stTextInput"] label *,
+    div[data-testid="stTextArea"] label,
+    div[data-testid="stTextArea"] label *,
+    div[data-testid="stSelectbox"] label,
+    div[data-testid="stSelectbox"] label *,
+    div[data-testid="stMultiSelect"] label,
+    div[data-testid="stMultiSelect"] label * {
+        color: var(--muted) !important;
+    }
+    .stButton > button {
+        border-radius: 8px;
+        border: 1px solid var(--line-strong);
+        background: #fff;
+        color: var(--ink);
+        min-height: 2.35rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+    .stButton > button:hover {
+        border-color: var(--blue);
+        color: var(--blue);
+    }
+    div[data-testid="stTextInput"] input,
+    div[data-testid="stTextArea"] textarea,
+    div[data-baseweb="select"] {
+        border-radius: 8px;
+    }
+    .brand-mark {
+        display: inline-flex;
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 9px;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #2563eb 0%, #14b8a6 100%);
+        color: #fff;
+        font-weight: 800;
+        margin-right: 0.5rem;
+    }
+    .sidebar-title {
+        display: flex;
+        align-items: center;
+        font-size: 1.15rem;
+        font-weight: 780;
+        color: var(--ink);
+        margin: 0.25rem 0 0.1rem;
+    }
+    .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.2rem 0 0.75rem;
+    }
+    .topbar-left {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--muted);
+        font-size: 0.82rem;
+    }
+    .user-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.36rem 0.7rem;
+        background: #fff;
+        color: var(--ink);
+        font-size: 0.78rem;
+    }
+    .avatar {
+        width: 1.45rem;
+        height: 1.45rem;
+        border-radius: 50%;
+        background: #64748b;
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+    .data-row {
+        display: grid;
+        grid-template-columns: 1.3fr 0.7fr 0.8fr 0.6fr 0.5fr;
+        gap: 0.4rem;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        padding: 0.62rem 0;
+        font-size: 0.78rem;
+    }
+    .data-row.header {
+        color: var(--muted);
+        font-size: 0.72rem;
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 0.52rem 0.45rem;
+        border-bottom: none;
+        margin-bottom: 0.2rem;
+    }
+    .data-row:not(.header) {
+        padding-left: 0.45rem;
+        padding-right: 0.45rem;
+    }
+    .mini-link {
+        color: var(--blue);
+        font-size: 0.78rem;
+        font-weight: 680;
+        margin-top: 0.4rem;
+    }
+    @media (max-width: 980px) {
+        .app-header {
+            display: block;
+        }
+        .toolbar {
+            justify-content: flex-start;
+            margin-top: 0.75rem;
+        }
+        .workflow {
+            grid-template-columns: 1fr;
+        }
+        .topbar {
+            display: block;
+        }
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+        unsafe_allow_html=True,
+    )
 
 
 def check_api_status() -> bool:
     try:
-        response = requests.get(f"{API_BASE_URL}/health", timeout=5)
+        response = requests.get(f"{API_BASE_URL}/health", timeout=2)
         return response.status_code == 200
-    except:
+    except Exception:
         return False
 
 
-def get_overview() -> Optional[Dict]:
+def query_sample_rag(question: str, top_k: int = 5) -> Optional[Dict]:
     try:
-        response = requests.get(f"{API_BASE_URL}/api/overview", timeout=10)
-        if response.status_code == 200:
-            return response.json()
-    except Exception as e:
-        st.error(f"获取概览数据失败: {e}")
-    return None
-
-
-def build_knowledge_base(data_path: str) -> Dict:
-    try:
-        response = requests.post(
-            f"{API_BASE_URL}/api/build-knowledge-base",
-            json={"data_path": data_path},
-            timeout=300
-        )
-        return response.json()
-    except Exception as e:
-        return {"success": False, "message": str(e)}
-
-
-def query_rag(question: str, sentiment_filter: str = None, top_k: int = 10) -> Dict:
-    try:
-        payload = {
-            "question": question,
-            "top_k": top_k
-        }
-        if sentiment_filter:
-            payload["sentiment_filter"] = sentiment_filter
-        
         response = requests.post(
             f"{API_BASE_URL}/api/query",
-            json=payload,
-            timeout=60
-        )
-        return response.json()
-    except Exception as e:
-        return {"answer": f"查询失败: {e}", "sources": []}
-
-
-def get_sentiment_trend(freq: str = "D") -> Optional[Dict]:
-    try:
-        response = requests.get(
-            f"{API_BASE_URL}/api/sentiment-trend",
-            params={"freq": freq},
-            timeout=10
+            json={"question": question, "top_k": top_k},
+            timeout=30,
         )
         if response.status_code == 200:
             return response.json()
-    except Exception as e:
-        st.error(f"获取情感趋势失败: {e}")
+    except Exception:
+        return None
     return None
 
 
-def get_comments(page: int = 1, page_size: int = 20, sentiment: str = None) -> Optional[Dict]:
+def get_local_sample_stats() -> Dict:
+    path = os.path.join("vector_store", "processed_data.csv")
+    if not os.path.exists(path):
+        return {"available": False}
+
     try:
-        params = {"page": page, "page_size": page_size}
-        if sentiment:
-            params["sentiment"] = sentiment
-        
-        response = requests.get(
-            f"{API_BASE_URL}/api/comments",
-            params=params,
-            timeout=10
-        )
-        if response.status_code == 200:
-            return response.json()
-    except Exception as e:
-        st.error(f"获取评论失败: {e}")
-    return None
+        df = pd.read_csv(path)
+        sentiment_counts = df["sentiment"].value_counts().to_dict() if "sentiment" in df else {}
+        return {
+            "available": True,
+            "count": len(df),
+            "sentiment_counts": sentiment_counts,
+            "columns": list(df.columns),
+        }
+    except Exception:
+        return {"available": False}
 
 
-def identify_risks(topic: str = None) -> Optional[Dict]:
-    try:
-        params = {}
-        if topic:
-            params["topic"] = topic
-        
-        response = requests.get(
-            f"{API_BASE_URL}/api/risks",
-            params=params,
-            timeout=60
-        )
-        if response.status_code == 200:
-            return response.json()
-    except Exception as e:
-        st.error(f"风险识别失败: {e}")
-    return None
+def ensure_work_view() -> str:
+    legacy_role_map = {
+        "市场运营负责人": "品牌运营",
+        "品牌公关": "公关风控",
+        "营销广告": "营销增长",
+        "销售策略": "竞品策略",
+        "管理层": DEFAULT_WORK_VIEW,
+    }
+    current = st.session_state.get("work_view")
+    if current not in ROLE_VIEWS:
+        current = legacy_role_map.get(st.session_state.get("role"), DEFAULT_WORK_VIEW)
+        st.session_state.work_view = current
+    return current
 
 
-def compare_viewpoints(topic: str) -> Optional[Dict]:
-    try:
-        response = requests.get(
-            f"{API_BASE_URL}/api/viewpoints/{topic}",
-            timeout=60
-        )
-        if response.status_code == 200:
-            return response.json()
-    except Exception as e:
-        st.error(f"观点对比失败: {e}")
-    return None
+def current_work_view() -> Dict:
+    return ROLE_VIEWS[ensure_work_view()]
 
 
-def generate_strategy(context: str, role: str = "政策制定者") -> Optional[Dict]:
-    try:
-        response = requests.post(
-            f"{API_BASE_URL}/api/strategy",
-            json={"context": context, "role": role},
-            timeout=60
-        )
-        if response.status_code == 200:
-            return response.json()
-    except Exception as e:
-        st.error(f"策略生成失败: {e}")
-    return None
+def list_items(items: List[str]) -> str:
+    return "".join(f'<div class="signal-card"><div class="signal-title">{item}</div></div>' for item in items)
 
 
-def render_overview_page():
-    st.markdown('<h1 class="main-header">📊 舆情总览</h1>', unsafe_allow_html=True)
-    
-    overview = get_overview()
-    
-    if not overview:
-        st.warning("请先构建知识库")
-        return
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("总评论数", overview["total_comments"])
-    
-    with col2:
-        sentiment_dist = overview["sentiment_distribution"]
-        st.metric("正面评论", f"{sentiment_dist['positive']} ({sentiment_dist['positive_ratio']:.1%})")
-    
-    with col3:
-        st.metric("负面评论", f"{sentiment_dist['negative']} ({sentiment_dist['negative_ratio']:.1%})")
-    
-    with col4:
-        st.metric("中性评论", f"{sentiment_dist['neutral']} ({sentiment_dist['neutral_ratio']:.1%})")
-    
-    st.markdown("---")
-    
-    col_left, col_right = st.columns(2)
-    
-    with col_left:
-        st.subheader("🎭 情感分布")
-        
-        labels = ['正面', '负面', '中性']
-        values = [
-            sentiment_dist['positive'],
-            sentiment_dist['negative'],
-            sentiment_dist['neutral']
-        ]
-        colors = ['#2ecc71', '#e74c3c', '#95a5a6']
-        
-        fig_pie = go.Figure(data=[go.Pie(
-            labels=labels,
-            values=values,
-            marker_colors=colors,
-            hole=0.4
-        )])
-        fig_pie.update_layout(height=400)
-        st.plotly_chart(fig_pie, use_container_width=True)
-    
-    with col_right:
-        st.subheader("📈 情感趋势")
-        
-        trend_data = get_sentiment_trend()
-        if trend_data and trend_data.get("trend"):
-            trend_df = pd.DataFrame(trend_data["trend"])
-            trend_df['date'] = pd.to_datetime(trend_df['date'])
-            
-            fig_trend = go.Figure()
-            fig_trend.add_trace(go.Scatter(
-                x=trend_df['date'],
-                y=trend_df['sentiment_balance'],
-                mode='lines+markers',
-                name='情感平衡值',
-                line=dict(color='#3498db', width=2)
-            ))
-            fig_trend.update_layout(
-                xaxis_title='日期',
-                yaxis_title='情感平衡值',
-                height=400
-            )
-            st.plotly_chart(fig_trend, use_container_width=True)
-        else:
-            st.info("暂无情感趋势数据")
-    
-    st.markdown("---")
-    
-    col_topic, col_keyword = st.columns(2)
-    
-    with col_topic:
-        st.subheader("📌 主要讨论主题")
-        
-        topics = overview.get("topics", [])
-        if topics:
-            for topic in topics:
-                with st.expander(topic["label"], expanded=False):
-                    st.write("**关键词:**", ", ".join(topic["keywords"]))
-        else:
-            st.info("暂无主题数据")
-    
-    with col_keyword:
-        st.subheader("🔤 热门关键词")
-        
-        keywords = overview.get("top_keywords", [])
-        if keywords:
-            kw_df = pd.DataFrame(keywords[:15])
-            fig_kw = px.bar(
-                kw_df,
-                x='weight',
-                y='word',
-                orientation='h',
-                color='weight',
-                color_continuous_scale='Blues'
-            )
-            fig_kw.update_layout(
-                height=400,
-                yaxis={'categoryorder': 'total ascending'}
-            )
-            st.plotly_chart(fig_kw, use_container_width=True)
-        else:
-            st.info("暂无关键词数据")
-
-
-def render_qa_page():
-    st.markdown('<h1 class="main-header">💬 智能问答</h1>', unsafe_allow_html=True)
-    
-    st.markdown("""
-    ### 使用指南
-    
-    您可以向系统提问以下类型的问题：
-    - **总结类**: 最近讨论焦点是什么？
-    - **风险识别类**: 当前负面情绪主要集中在哪些方面？
-    - **立场对比类**: 支持与反对的核心观点分别是什么？
-    - **策略建议类**: 如果我是政策制定者，应如何回应？
-    """)
-    
-    st.markdown("---")
-    
-    col_filter1, col_filter2 = st.columns(2)
-    with col_filter1:
-        sentiment_filter = st.selectbox(
-            "情感筛选",
-            options=["全部", "正面", "负面", "中性"],
-            index=0
-        )
-        sentiment_map = {"全部": None, "正面": "positive", "负面": "negative", "中性": "neutral"}
-    
-    with col_filter2:
-        top_k = st.slider("检索数量", min_value=5, max_value=20, value=10)
-    
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-    
-    for msg in st.session_state.chat_history:
-        if msg["role"] == "user":
-            st.markdown(f"""
-            <div class="chat-message user-message">
-                <strong>👤 您:</strong> {msg["content"]}
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="chat-message assistant-message">
-                <strong>🤖 助手:</strong><br>
-                {msg["content"]}
-            </div>
-            """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    question = st.text_area("输入您的问题:", height=100)
-    
-    col_btn1, col_btn2 = st.columns(2)
-    
-    with col_btn1:
-        if st.button("发送问题", type="primary", use_container_width=True):
-            if question.strip():
-                with st.spinner("正在分析..."):
-                    result = query_rag(
-                        question,
-                        sentiment_filter=sentiment_map.get(sentiment_filter),
-                        top_k=top_k
-                    )
-                    
-                    st.session_state.chat_history.append({
-                        "role": "user",
-                        "content": question
-                    })
-                    
-                    st.session_state.chat_history.append({
-                        "role": "assistant",
-                        "content": result.get("answer", "抱歉，无法生成回答")
-                    })
-                    
-                    st.rerun()
-            else:
-                st.warning("请输入问题")
-    
-    with col_btn2:
-        if st.button("清空对话", use_container_width=True):
-            st.session_state.chat_history = []
-            st.rerun()
-    
-    st.markdown("---")
-    st.subheader("🎯 快捷问题")
-    
-    quick_questions = [
-        "最近讨论焦点是什么？",
-        "当前负面情绪主要集中在哪些方面？",
-        "支持与反对的核心观点分别是什么？",
-        "如果我是政策制定者，应如何回应？"
-    ]
-    
-    cols = st.columns(2)
-    for i, q in enumerate(quick_questions):
-        with cols[i % 2]:
-            if st.button(q, key=f"quick_{i}", use_container_width=True):
-                with st.spinner("正在分析..."):
-                    result = query_rag(q, top_k=top_k)
-                    
-                    st.session_state.chat_history.append({
-                        "role": "user",
-                        "content": q
-                    })
-                    
-                    st.session_state.chat_history.append({
-                        "role": "assistant",
-                        "content": result.get("answer", "抱歉，无法生成回答")
-                    })
-                    
-                    st.rerun()
-
-
-def render_comments_page():
-    st.markdown('<h1 class="main-header">📝 评论浏览</h1>', unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([3, 1])
-    
-    with col1:
-        sentiment_filter = st.selectbox(
-            "情感筛选",
-            options=["全部", "正面", "负面", "中性"],
-            index=0
-        )
-        sentiment_map = {"全部": None, "正面": "positive", "负面": "negative", "中性": "neutral"}
-    
-    with col2:
-        page_size = st.selectbox("每页显示", options=[10, 20, 50], index=1)
-    
-    if "current_page" not in st.session_state:
-        st.session_state.current_page = 1
-    
-    comments_data = get_comments(
-        page=st.session_state.current_page,
-        page_size=page_size,
-        sentiment=sentiment_map.get(sentiment_filter)
-    )
-    
-    if comments_data:
-        st.markdown(f"**共 {comments_data['total']} 条评论**")
-        
-        for comment in comments_data["comments"]:
-            sentiment_emoji = {
-                "positive": "😊",
-                "negative": "😠",
-                "neutral": "😐"
-            }
-            sentiment_color = {
-                "positive": "#2ecc71",
-                "negative": "#e74c3c",
-                "neutral": "#95a5a6"
-            }
-            
-            emoji = sentiment_emoji.get(comment["sentiment"], "😐")
-            color = sentiment_color.get(comment["sentiment"], "#95a5a6")
-            
-            st.markdown(f"""
-            <div style="border-left: 4px solid {color}; padding-left: 1rem; margin: 1rem 0;">
-                <p>{comment["content"]}</p>
-                <small>
-                    {emoji} {comment["sentiment"]} | 
-                    👍 {comment["like_count"]} | 
-                    📅 {comment["publish_time"]}
-                </small>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        total_pages = (comments_data["total"] + page_size - 1) // page_size
-        
-        col_prev, col_page, col_next = st.columns([1, 2, 1])
-        
-        with col_prev:
-            if st.button("上一页", disabled=st.session_state.current_page <= 1):
-                st.session_state.current_page -= 1
-                st.rerun()
-        
-        with col_page:
-            st.markdown(f"<p style='text-align: center;'>第 {st.session_state.current_page} / {total_pages} 页</p>", unsafe_allow_html=True)
-        
-        with col_next:
-            if st.button("下一页", disabled=st.session_state.current_page >= total_pages):
-                st.session_state.current_page += 1
-                st.rerun()
-    else:
-        st.info("暂无评论数据")
-
-
-def render_analysis_page():
-    st.markdown('<h1 class="main-header">🔍 深度分析</h1>', unsafe_allow_html=True)
-    
-    tab1, tab2, tab3 = st.tabs(["⚠️ 风险识别", "⚖️ 观点对比", "📋 策略建议"])
-    
-    with tab1:
-        st.subheader("风险识别")
-        
-        topic_input = st.text_input("指定主题（可选）:", key="risk_topic")
-        
-        if st.button("识别风险", type="primary"):
-            with st.spinner("正在分析风险..."):
-                result = identify_risks(topic_input if topic_input else None)
-                
-                if result:
-                    st.markdown("### 风险分析结果")
-                    st.markdown(result.get("risks", ""))
-                    
-                    if result.get("negative_sources"):
-                        st.markdown("#### 相关负面评论")
-                        for i, source in enumerate(result["negative_sources"][:5], 1):
-                            st.markdown(f"""
-                            <div style="background-color: #fff5f5; padding: 0.5rem; border-radius: 5px; margin: 0.5rem 0;">
-                                <strong>{i}.</strong> {source.get("content", "")}
-                                <br><small>相似度: {source.get("similarity_score", 0):.3f}</small>
-                            </div>
-                            """, unsafe_allow_html=True)
-    
-    with tab2:
-        st.subheader("观点对比")
-        
-        compare_topic = st.text_input("输入对比主题:", key="compare_topic")
-        
-        if st.button("对比观点", type="primary"):
-            if compare_topic:
-                with st.spinner("正在分析观点..."):
-                    result = compare_viewpoints(compare_topic)
-                    
-                    if result:
-                        col_support, col_oppose = st.columns(2)
-                        
-                        with col_support:
-                            st.markdown("### ✅ 支持观点")
-                            st.markdown(result.get("supporting_views", ""))
-                        
-                        with col_oppose:
-                            st.markdown("### ❌ 反对观点")
-                            st.markdown(result.get("opposing_views", ""))
-            else:
-                st.warning("请输入对比主题")
-    
-    with tab3:
-        st.subheader("策略建议")
-        
-        strategy_context = st.text_area("输入背景情况:", height=100, key="strategy_context")
-        strategy_role = st.selectbox("角色设定:", ["政策制定者", "公关人员", "研究人员"])
-        
-        if st.button("生成策略", type="primary"):
-            if strategy_context:
-                with st.spinner("正在生成策略..."):
-                    result = generate_strategy(strategy_context, strategy_role)
-                    
-                    if result:
-                        st.markdown("### 📋 策略建议")
-                        st.markdown(f"**角色:** {result.get('role', '')}")
-                        st.markdown(f"**背景:** {result.get('context', '')}")
-                        st.markdown("---")
-                        st.markdown(result.get("strategy", ""))
-            else:
-                st.warning("请输入背景情况")
-
-
-def render_settings_page():
-    st.markdown('<h1 class="main-header">⚙️ 系统设置</h1>', unsafe_allow_html=True)
-    
-    st.subheader("API 状态")
-    
-    if check_api_status():
-        st.success("✅ API 服务正常运行")
-    else:
-        st.error("❌ API 服务未运行，请先启动后端服务")
-    
-    st.markdown("---")
-    
-    st.subheader("知识库管理")
-    
-    data_path = st.text_input("数据文件路径:", value="./data/comments.csv")
-    
-    if st.button("构建知识库", type="primary"):
-        with st.spinner("正在构建知识库，这可能需要几分钟..."):
-            result = build_knowledge_base(data_path)
-            
-            if result.get("success"):
-                st.success(f"✅ {result.get('message')}，共处理 {result.get('documents_count', 0)} 条文档")
-            else:
-                st.error(f"❌ 构建失败: {result.get('message', '未知错误')}")
-    
-    st.markdown("---")
-    
-    st.subheader("系统信息")
-    
-    try:
-        response = requests.get(f"{API_BASE_URL}/api/statistics", timeout=5)
-        if response.status_code == 200:
-            stats = response.json()
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**数据统计**")
-                st.json({
-                    "总评论数": stats.get("total_comments", 0),
-                    "情感分布": stats.get("sentiment_counts", {}),
-                    "点赞统计": stats.get("like_statistics", {})
-                })
-            
-            with col2:
-                st.markdown("**向量库信息**")
-                st.json(stats.get("vector_store", {}))
-    except:
-        st.info("无法获取系统统计信息")
-
-
-def main():
-    st.sidebar.markdown("""
-    <div style="text-align: center; padding: 1rem;">
-        <h2>📊 舆情助手</h2>
-        <p>生育议题智能分析</p>
+def render_header(title: str, subtitle: str, context: str = "新消费品牌演示空间") -> None:
+    st.markdown(
+        f"""
+<div class="app-header">
+    <div>
+        <div class="eyebrow">InsightOps · 企业市场情报 Agent</div>
+        <h1 class="title">{title}</h1>
+        <div class="subtitle">{subtitle}</div>
     </div>
-    """, unsafe_allow_html=True)
-    
+    <div class="toolbar">
+        <span class="chip">演示行业：{context}</span>
+        <span class="chip">数据层：Mock + 样例评论库</span>
+        <span class="chip">周期：近 7 天</span>
+    </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_topbar() -> None:
+    work_view = ensure_work_view()
+    view = ROLE_VIEWS[work_view]
+    st.markdown(
+        f"""
+<div class="topbar">
+    <div class="topbar-left">
+        <span>当前空间：NewBrand 团队</span>
+        <span class="chip">当前工作视角：{work_view}</span>
+        <span class="chip">近 7 天</span>
+        <span class="chip">自定义看板</span>
+    </div>
+    <div class="toolbar">
+        <span class="chip">12 条通知</span>
+        <span class="user-pill"><span class="avatar">NB</span> NewBrand 团队</span>
+    </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    switch_col, hint_col = st.columns([1.65, 1], gap="medium")
+    with switch_col:
+        st.radio(
+            "当前工作视角",
+            list(ROLE_VIEWS.keys()),
+            horizontal=True,
+            key="work_view",
+        )
+    with hint_col:
+        st.markdown(f'<div class="small-note" style="padding-top:1.85rem;">{view["subtitle"]}</div>', unsafe_allow_html=True)
+
+
+def metric_card(label: str, value: str, delta: str, tone: str) -> None:
+    tone_class = {
+        "up": "delta-up",
+        "ok": "delta-ok",
+        "warn": "delta-warn",
+        "bad": "delta-bad",
+    }.get(tone, "delta-ok")
+    st.markdown(
+        f"""
+<div class="metric-card">
+    <div class="metric-label">{label}</div>
+    <div class="metric-value">{value}</div>
+    <span class="metric-delta {tone_class}">{delta}</span>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def panel_title(title: str, caption: str = "") -> None:
+    st.markdown(
+        f"""
+<div class="panel-title">
+    <strong>{title}</strong>
+    <span>{caption}</span>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_monitor_table() -> None:
+    rows = [
+        ("新品上市舆情监测", "运行中", "326", "2", "↗"),
+        ("竞品动态追踪", "运行中", "512", "1", "↗"),
+        ("价格与促销监测", "运行中", "278", "0", "↗"),
+        ("社媒声量监测", "运行中", "689", "3", "↗"),
+        ("行业政策跟踪", "已暂停", "120", "1", "↗"),
+    ]
+    html = [
+        '<div class="data-row header"><span>项目名称</span><span>状态</span><span>今日新增</span><span>风险</span><span>操作</span></div>'
+    ]
+    for name, status, added, risk, action in rows:
+        tag_class = "tag-run" if status == "运行中" else "tag-low"
+        risk_color = "#dc2626" if risk != "0" else "#475569"
+        html.append(
+            f"""
+<div class="data-row">
+    <span>{name}</span>
+    <span><span class="tag {tag_class}">{status}</span></span>
+    <span>{added}</span>
+    <span style="color:{risk_color}; font-weight:700;">{risk}</span>
+    <span style="color:var(--blue); font-weight:700;">{action}</span>
+</div>
+"""
+        )
+    html.append('<div class="mini-link">查看全部项目 →</div>')
+    st.markdown("".join(html), unsafe_allow_html=True)
+
+
+def render_competitor_mini_radar() -> None:
+    categories = ["产品力", "价格力", "渠道力", "营销力", "口碑力", "创新力"]
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatterpolar(
+            r=[72, 68, 61, 76, 70, 58],
+            theta=categories,
+            fill="toself",
+            name="本品牌",
+            line_color="#14b8a6",
+            fillcolor="rgba(20, 184, 166, 0.12)",
+        )
+    )
+    fig.add_trace(
+        go.Scatterpolar(
+            r=[82, 74, 67, 71, 62, 78],
+            theta=categories,
+            fill="toself",
+            name="竞品 A",
+            line_color="#2563eb",
+            fillcolor="rgba(37, 99, 235, 0.10)",
+        )
+    )
+    fig.add_trace(
+        go.Scatterpolar(
+            r=[65, 82, 72, 58, 64, 70],
+            theta=categories,
+            fill="toself",
+            name="竞品 B",
+            line_color="#8b5cf6",
+            fillcolor="rgba(139, 92, 246, 0.10)",
+        )
+    )
+    fig.update_layout(
+        height=260,
+        margin=dict(l=12, r=12, t=12, b=12),
+        polar=dict(radialaxis=dict(visible=False, range=[0, 100]), bgcolor="rgba(0,0,0,0)"),
+        legend=dict(orientation="h", y=-0.12, x=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#475569", size=11),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def render_trend_chart() -> None:
+    trend_df = pd.DataFrame(
+        {
+            "日期": ["05-08", "05-09", "05-10", "05-11", "05-12", "05-13", "05-14"],
+            "本品牌": [3500, 5600, 3900, 5200, 6800, 5000, 6700],
+            "竞品 A": [2100, 3000, 1900, 2700, 3400, 2500, 3000],
+            "竞品 B": [900, 1300, 850, 1100, 1250, 980, 1180],
+        }
+    )
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=trend_df["日期"], y=trend_df["本品牌"], name="本品牌", mode="lines", line=dict(color="#14b8a6", width=3), fill="tozeroy", fillcolor="rgba(20, 184, 166, .08)"))
+    fig.add_trace(go.Scatter(x=trend_df["日期"], y=trend_df["竞品 A"], name="竞品 A", mode="lines", line=dict(color="#2563eb", width=2)))
+    fig.add_trace(go.Scatter(x=trend_df["日期"], y=trend_df["竞品 B"], name="竞品 B", mode="lines", line=dict(color="#8b5cf6", width=2)))
+    fig.update_layout(
+        height=270,
+        margin=dict(l=8, r=8, t=8, b=8),
+        legend=dict(orientation="h", y=1.08, x=0.58),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(showgrid=False),
+        yaxis=dict(gridcolor="#e2e8f0"),
+        font=dict(color="#475569", size=11),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def risk_tag(level: str) -> str:
+    if level == "高":
+        return '<span class="tag tag-high">高风险</span>'
+    if level == "中":
+        return '<span class="tag tag-mid">中风险</span>'
+    return '<span class="tag tag-low">低风险</span>'
+
+
+def render_signal_card(event: Dict) -> None:
+    st.markdown(
+        f"""
+<div class="signal-card">
+    <div class="signal-top">
+        <div class="signal-title">{event["title"]}</div>
+        {risk_tag(event["level"])}
+    </div>
+    <div class="signal-meta">
+        {event["trend"]} · {event["platform"]}<br>
+        负责人：{event["owner"]} · 状态：{event["status"]} · AI 置信度：{event["confidence"]}%
+    </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_workflow() -> None:
+    steps = [
+        ("配置监测", "品牌词、竞品词、活动词、风险词"),
+        ("信号发现", "识别异常声量、负面扩散与新兴议题"),
+        ("Agent 研判", "归因、证据链、置信度和影响面"),
+        ("业务处置", "分派负责人、生成口径和行动建议"),
+        ("报告沉淀", "日报、周报、复盘与策略资产"),
+    ]
+    html = ['<div class="workflow">']
+    for title, desc in steps:
+        html.append(f'<div class="workflow-step"><strong>{title}</strong><span>{desc}</span></div>')
+    html.append("</div>")
+    st.markdown("".join(html), unsafe_allow_html=True)
+
+
+def render_market_dashboard() -> None:
+    work_view = ensure_work_view()
+    view = current_work_view()
+    render_header("市场情报总览", f"当前工作视角：{work_view}。{view['subtitle']}")
+
+    metric_cols = st.columns(5)
+    metrics = view["metrics"] + [("情报覆盖平台", "42", "新增 3", "ok")]
+    for col, metric in zip(metric_cols, metrics):
+        with col:
+            metric_card(*metric)
+
+    st.write("")
+    main_col, copilot_col = st.columns([2.65, 1], gap="medium")
+
+    with main_col:
+        row1_left, row1_mid, row1_right = st.columns([1.18, 1.08, 0.98], gap="medium")
+        with row1_left:
+            st.markdown('<div class="panel">', unsafe_allow_html=True)
+            panel_title("监测项目", "全部项目")
+            render_monitor_table()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with row1_mid:
+            st.markdown('<div class="panel">', unsafe_allow_html=True)
+            panel_title("风险信号", "全部 7")
+            for event in RISK_EVENTS:
+                render_signal_card(event)
+            st.markdown('<div class="mini-link">查看全部风险 →</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with row1_right:
+            st.markdown('<div class="panel">', unsafe_allow_html=True)
+            panel_title("竞品雷达", "能力对比")
+            render_competitor_mini_radar()
+            st.markdown('<div class="mini-link">查看竞品对比 →</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        row2_left, row2_right = st.columns([1.35, 1], gap="medium")
+        with row2_left:
+            st.markdown('<div class="panel">', unsafe_allow_html=True)
+            panel_title("情报趋势", "声量趋势")
+            render_trend_chart()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with row2_right:
+            st.markdown('<div class="panel">', unsafe_allow_html=True)
+            panel_title("证据速览", "最新证据")
+            evidence_rows = [
+                ("抖音", "用户讨论新品包装设计", "正面", "2 分钟前", "tag-run"),
+                ("小红书", "KOL 测评中提到竞品降价", "中性", "15 分钟前", "tag-mid"),
+                ("微博", "用户反馈产品口感问题", "负面", "32 分钟前", "tag-high"),
+            ]
+            for platform, text, tone, time, tag_class in evidence_rows:
+                st.markdown(
+                    f"""
+<div class="signal-card">
+    <div class="signal-top">
+        <div class="signal-title">{platform} · {text}</div>
+        <span class="tag {tag_class}">{tone}</span>
+    </div>
+    <div class="signal-meta">{time}</div>
+</div>
+""",
+                    unsafe_allow_html=True,
+                )
+            st.markdown('<div class="mini-link">查看全部证据 →</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        st.write("")
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("监测到处置闭环", "企业业务流程")
+        render_workflow()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with copilot_col:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("今日待处理事项", work_view)
+        st.markdown(list_items(view["focus"]), unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.write("")
+        render_copilot("首页总览", RISK_EVENTS[0], compact=True)
+
+
+def render_agent_center() -> None:
+    work_view = ensure_work_view()
+    view = current_work_view()
+    render_header(
+        "Agent 研判中心",
+        f"当前工作视角：{work_view}。Agent 会按该视角重排信号队列、待办任务和建议输出物。",
+    )
+
+    stage_cols = st.columns(4)
+    stage_metrics = [
+        ("捕捉信号", "23", "较昨日 +6", "up"),
+        ("待确认研判", "8", "需人工复核", "warn"),
+        ("已生成建议", "12", work_view, "ok"),
+        ("推荐输出物", "6", "按视角预设", "ok"),
+    ]
+    for col, metric in zip(stage_cols, stage_metrics):
+        with col:
+            metric_card(*metric)
+
+    st.write("")
+    left, right = st.columns([1.15, 1.85])
+
+    with left:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("信号队列", f"{work_view}优先级")
+        for title, status, code in view["agent_queue"]:
+            st.markdown(
+                f"""
+<div class="signal-card">
+    <div class="signal-title">{title}</div>
+    <div class="signal-meta">编号：{code} · 状态：{status}</div>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+        st.markdown(f'<div class="answer-box">建议输出物：{view["agent_output"]}</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with right:
+        selected = RISK_EVENTS[0]
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("当前重点研判", selected["id"])
+        st.markdown(f"### {selected['title']}")
+        st.markdown(f'<div class="small-note">{selected["summary"]}</div>', unsafe_allow_html=True)
+
+        chart_cols = st.columns([1.1, 1])
+        with chart_cols[0]:
+            driver_df = pd.DataFrame(
+                {"归因": list(selected["drivers"].keys()), "占比": list(selected["drivers"].values())}
+            )
+            fig = px.bar(
+                driver_df,
+                x="占比",
+                y="归因",
+                orientation="h",
+                color="占比",
+                color_continuous_scale=["#c7d7fe", "#246bfe"],
+            )
+            fig.update_layout(height=280, margin=dict(l=8, r=8, t=12, b=8), coloraxis_showscale=False)
+            st.plotly_chart(fig, use_container_width=True)
+        with chart_cols[1]:
+            st.markdown("**证据链**")
+            for evidence in selected["evidence"]:
+                st.markdown(f'<div class="evidence">{evidence}</div>', unsafe_allow_html=True)
+
+        st.markdown("**建议动作**")
+        action_cols = st.columns(4)
+        for col, action in zip(action_cols, view["risk_actions"]):
+            with col:
+                st.button(action, key=f"agent_{work_view}_{action}", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.write("")
+    render_copilot("高风险事件 R-024", RISK_EVENTS[0])
+
+
+def render_risk_center() -> None:
+    work_view = ensure_work_view()
+    view = current_work_view()
+    render_header("风险事件中心", f"当前工作视角：{work_view}。同一风险事件会按不同业务职责给出解释重点和处置动作。")
+
+    list_col, detail_col = st.columns([1, 1.6])
+
+    with list_col:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("风险列表", "按紧急度排序")
+        labels = [f'{event["id"]} · {event["title"]}' for event in RISK_EVENTS]
+        selected_label = st.radio("选择风险事件", labels, label_visibility="collapsed")
+        selected_index = labels.index(selected_label)
+        for event in RISK_EVENTS:
+            render_signal_card(event)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    event = RISK_EVENTS[selected_index]
+    with detail_col:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("事件详情", event["id"])
+        top = st.columns(4)
+        top[0].metric("风险等级", event["level"])
+        top[1].metric("AI 置信度", f'{event["confidence"]}%')
+        top[2].metric("负责人", event["owner"])
+        top[3].metric("状态", event["status"])
+        st.markdown(f"#### {event['title']}")
+        st.markdown(f'<div class="small-note">{event["summary"]}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="answer-box"><strong>{work_view}解释重点：</strong>{view["risk_lens"]}</div>', unsafe_allow_html=True)
+
+        st.write("")
+        driver_df = pd.DataFrame(
+            {"原因": list(event["drivers"].keys()), "占比": list(event["drivers"].values())}
+        )
+        fig = go.Figure(
+            data=[
+                go.Pie(
+                    labels=driver_df["原因"],
+                    values=driver_df["占比"],
+                    hole=0.58,
+                    marker=dict(colors=["#246bfe", "#12a594", "#f59e0b", "#ef4444"]),
+                )
+            ]
+        )
+        fig.update_layout(height=260, margin=dict(l=8, r=8, t=8, b=8), showlegend=True)
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("**评论证据**")
+        for evidence in event["evidence"]:
+            st.markdown(f'<div class="evidence">{evidence}</div>', unsafe_allow_html=True)
+
+        st.markdown("**处置动作**")
+        cols = st.columns(4)
+        for col, action in zip(cols, view["risk_actions"]):
+            with col:
+                st.button(action, key=f"{event['id']}_{work_view}_{action}", use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.write("")
+    render_copilot(f"风险事件 {event['id']}", event)
+
+
+def render_competitor_radar() -> None:
+    work_view = ensure_work_view()
+    view = current_work_view()
+    render_header("竞品情报雷达", f"当前工作视角：{work_view}。竞品动态会被转译成该视角最需要的机会、风险或行动资产。")
+
+    comp_df = pd.DataFrame(COMPETITORS)
+    top_cols = st.columns(3)
+    for col, comp in zip(top_cols, COMPETITORS):
+        with col:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-label">{comp["name"]}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="metric-value">声量 {comp["share"]}%</div>', unsafe_allow_html=True)
+            st.markdown(f'<span class="metric-delta delta-up">{comp["change"]}</span>', unsafe_allow_html=True)
+            st.markdown(f'<div class="small-note" style="margin-top:.7rem;">{comp["signal"]}</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+    st.write("")
+    left, right = st.columns([1.2, 1])
+
+    with left:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("声量与口碑对比", "Mock 数据")
+        fig = go.Figure()
+        fig.add_trace(go.Bar(name="声量份额", x=comp_df["name"], y=comp_df["share"], marker_color="#246bfe"))
+        fig.add_trace(go.Scatter(name="正向口碑", x=comp_df["name"], y=comp_df["sentiment"], marker_color="#12a594"))
+        fig.update_layout(height=360, margin=dict(l=8, r=8, t=24, b=8), legend=dict(orientation="h"))
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with right:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("可转化机会", work_view)
+        st.markdown(f'<div class="answer-box">{view["competitor_focus"]}</div>', unsafe_allow_html=True)
+        for comp in COMPETITORS:
+            if work_view == "营销增长":
+                opportunity = f"素材启发：{comp['signal']} 可拆解其达人表达、促销包装和用户反感点，作为下一轮投放测试假设。"
+            elif work_view == "公关风控":
+                opportunity = f"风险解释：{comp['signal']} 需观察竞品对比是否放大本品牌负面，优先准备事实边界和客服口径。"
+            elif work_view == "品牌运营":
+                opportunity = f"协同事项：{comp['signal']} 建议同步至日报，并判断是否分派给营销增长或竞品策略继续跟进。"
+            else:
+                opportunity = comp["opportunity"]
+            st.markdown(
+                f"""
+<div class="signal-card">
+    <div class="signal-title">{comp["name"]}</div>
+    <div class="signal-meta">{opportunity}</div>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.write("")
+    render_copilot("竞品雷达", RISK_EVENTS[2])
+
+
+def render_report_center() -> None:
+    work_view = ensure_work_view()
+    view = current_work_view()
+    defaults = view["report_defaults"]
+    render_header("报告中心", f"当前工作视角：{work_view}。报告生成器会自动预设报告类型、目标读者和默认模块。")
+
+    left, right = st.columns([1.2, 1])
+    with left:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("报告列表", "按更新时间")
+        report_df = pd.DataFrame(REPORTS)
+        st.dataframe(report_df, use_container_width=True, hide_index=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with right:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("报告生成器", f"{work_view}预设")
+        st.markdown('<div class="small-note">管理层保留为报告受众和老板版简报，不作为日常可切换工作视角。</div>', unsafe_allow_html=True)
+        report_types = ["市场情报日报", "风险事件简报", "竞品追踪周报", "营销活动复盘", "管理层简报"]
+        audiences = ["品牌运营负责人", "公关风控负责人", "营销增长负责人", "竞品策略负责人", "管理层"]
+        module_options = ["关键结论", "风险事件", "竞品变化", "证据评论", "建议动作", "下周观察点"]
+        report_type = st.selectbox(
+            "报告类型",
+            report_types,
+            index=report_types.index(defaults["type"]),
+            key=f"report_type_{work_view}",
+        )
+        audience = st.selectbox(
+            "目标读者",
+            audiences,
+            index=audiences.index(defaults["audience"]),
+            key=f"audience_{work_view}",
+        )
+        include = st.multiselect(
+            "包含模块",
+            module_options,
+            default=[module for module in defaults["modules"] if module in module_options],
+            key=f"modules_{work_view}",
+        )
+        st.markdown(f'<div class="small-note">默认输出物：{view["agent_output"]}</div>', unsafe_allow_html=True)
+        draft_key = f"report_draft_{work_view}"
+        if st.button("生成报告草稿", use_container_width=True, type="primary"):
+            st.session_state[draft_key] = (
+                f"{report_type}草稿已生成，面向{audience}，包含{len(include)}个模块。"
+                f"当前按“{work_view}”视角组织内容，建议重点呈现广告争议风险、竞品 A 新品影响和售后体验观察点。"
+            )
+        if st.session_state.get(draft_key):
+            st.markdown(f'<div class="answer-box">{st.session_state[draft_key]}</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.write("")
+    render_copilot("报告中心", RISK_EVENTS[0])
+
+
+def render_sample_data_lab() -> None:
+    work_view = ensure_work_view()
+    render_header("样例评论库", f"当前工作视角：{work_view}。本页保留旧后端能力作为技术链路展示，不强行绑定新消费品牌业务场景。")
+
+    stats = get_local_sample_stats()
+    api_online = check_api_status()
+
+    cols = st.columns(4)
+    cols[0].metric("后端 API", "在线" if api_online else "离线")
+    cols[1].metric("样例评论", stats.get("count", 0) if stats.get("available") else "未加载")
+    cols[2].metric("数据定位", "小红书生育评论")
+    cols[3].metric("产品层", "Mock 业务数据")
+
+    st.markdown(
+        """
+<div class="small-note">
+说明：当前真实数据库来自历史爬取的小红书“生育”关键词评论。它可以证明评论检索和 RAG 技术链路，
+但不适合作为新消费品牌市场情报 Agent 的业务依据。因此主产品原型使用新消费品牌 Mock 数据，
+本页仅作为“部分功能可用”的技术展示区。
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    if stats.get("available") and stats.get("sentiment_counts"):
+        st.write("")
+        sentiment_df = pd.DataFrame(
+            {"情感": list(stats["sentiment_counts"].keys()), "数量": list(stats["sentiment_counts"].values())}
+        )
+        fig = px.bar(
+            sentiment_df,
+            x="情感",
+            y="数量",
+            color="情感",
+            color_discrete_map={"neutral": "#94a3b8", "positive": "#12a594", "negative": "#ef4444"},
+        )
+        fig.update_layout(
+            height=320,
+            margin=dict(l=8, r=8, t=16, b=8),
+            showlegend=False,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#475569", size=11),
+            xaxis=dict(showgrid=False),
+            yaxis=dict(gridcolor="#e2e8f0"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.write("")
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    panel_title("样例 RAG 查询", "仅在后端服务启动时可用")
+    question = st.text_input("查询样例评论库", value="当前负面情绪主要集中在哪些方面？")
+    if st.button("查询样例库", type="primary"):
+        result = query_sample_rag(question)
+        if result:
+            st.markdown(f'<div class="answer-box">{result.get("answer", "")}</div>', unsafe_allow_html=True)
+            st.caption(f"检索到 {result.get('retrieval_count', 0)} 条样例评论。")
+        else:
+            st.warning("后端未启动或查询失败。可先运行 start.bat 启动 API 服务。")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_copilot(context: str, event: Dict, compact: bool = False) -> None:
+    work_view = ensure_work_view()
+    view = current_work_view()
+    answer_key = f"copilot_answer_{context}_{work_view}"
+    st.markdown('<div class="copilot-box">', unsafe_allow_html=True)
+    st.markdown("<strong>✦ Copilot</strong>", unsafe_allow_html=True)
+    st.markdown(
+        f"<p>您好，NewBrand 团队。当前上下文：{context}。当前工作视角：{work_view}。我会优先生成该视角最需要的动作、报告或话术资产。</p>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    for command in view["copilot_commands"]:
+        st.markdown(
+            f"""
+<div class="copilot-card">
+    <span class="copilot-icon">{command["icon"]}</span>
+    <div><strong>{command["title"]}</strong><span>{command["desc"]}</span></div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+        if st.button(command["button"], key=f"{context}_{work_view}_{command['button']}", use_container_width=True):
+            st.session_state[answer_key] = command["answer"]
+
+    tags = st.columns(4)
+    for tag_col, tag in zip(tags, ["全网", "社媒", "新闻", "行业报告"]):
+        with tag_col:
+            st.button(tag, key=f"{context}_{work_view}_tag_{tag}", use_container_width=True)
+
+    custom = st.text_input(
+        "输入业务指令",
+        placeholder="输入你的问题或指令，Shift + Enter 换行",
+        key=f"copilot_input_{context}_{work_view}",
+    )
+    if st.button("发送给 Copilot", key=f"send_{context}_{work_view}", type="primary"):
+        if custom.strip():
+            st.session_state[answer_key] = (
+                f"已基于“{event['title']}”和“{work_view}”视角生成建议：{view['risk_lens']}"
+                f"下一步建议围绕“{custom.strip()}”输出可交付材料，并沉淀为{view['agent_output']}。"
+            )
+        else:
+            st.session_state[answer_key] = "请输入一个具体业务指令，例如生成回应口径、整理证据摘要、生成竞品话术或加入今日简报。"
+
+    if st.session_state.get(answer_key):
+        st.markdown(f'<div class="answer-box">{st.session_state[answer_key]}</div>', unsafe_allow_html=True)
+
+
+def render_sidebar() -> str:
+    st.sidebar.markdown(
+        """
+<div class="sidebar-title"><span class="brand-mark">IO</span> InsightOps</div>
+<div class="small-note">企业市场情报 Agent</div>
+""",
+        unsafe_allow_html=True,
+    )
+    st.sidebar.markdown("---")
     page = st.sidebar.radio(
         "导航",
-        options=["📈 舆情总览", "💬 智能问答", "📝 评论浏览", "🔍 深度分析", "⚙️ 系统设置"],
-        index=0
+        [
+            "市场情报总览",
+            "Agent 研判中心",
+            "风险事件中心",
+            "竞品情报雷达",
+            "报告中心",
+            "样例评论库",
+        ],
     )
-    
     st.sidebar.markdown("---")
-    
-    if check_api_status():
-        st.sidebar.success("✅ 服务正常")
+    st.sidebar.caption("数据更新")
+    st.sidebar.markdown(
+        """
+- 新消费品牌 Mock 数据
+- 旧 RAG 链路局部保留
+- 2 分钟前同步
+"""
+    )
+    st.sidebar.markdown("---")
+    api_online = check_api_status()
+    if api_online:
+        st.sidebar.success("API 在线")
     else:
-        st.sidebar.error("❌ 服务离线")
-    
-    st.sidebar.markdown("""
-    ---
-    **使用说明**
-    
-    1. 首先在"系统设置"中构建知识库
-    2. 然后可以查看舆情总览
-    3. 使用智能问答进行交互
-    """)
-    
-    if "📈 舆情总览" in page:
-        render_overview_page()
-    elif "💬 智能问答" in page:
-        render_qa_page()
-    elif "📝 评论浏览" in page:
-        render_comments_page()
-    elif "🔍 深度分析" in page:
-        render_analysis_page()
-    elif "⚙️ 系统设置" in page:
-        render_settings_page()
+        st.sidebar.warning("API 未启动")
+    return page
+
+
+def main() -> None:
+    inject_styles()
+    page = render_sidebar()
+    ensure_work_view()
+    render_topbar()
+
+    if page == "市场情报总览":
+        render_market_dashboard()
+    elif page == "Agent 研判中心":
+        render_agent_center()
+    elif page == "风险事件中心":
+        render_risk_center()
+    elif page == "竞品情报雷达":
+        render_competitor_radar()
+    elif page == "报告中心":
+        render_report_center()
+    else:
+        render_sample_data_lab()
 
 
 if __name__ == "__main__":
