@@ -597,14 +597,27 @@ def inject_styles() -> None:
         align-items: center;
         margin-bottom: 0.75rem;
         gap: 0.5rem;
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        padding: 0.78rem 0.9rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
     }
     .panel-title strong {
         font-size: 0.95rem;
         color: var(--ink);
+        line-height: 1.35;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
     .panel-title span {
         font-size: 0.78rem;
         color: var(--muted);
+        line-height: 1.35;
+        text-align: right;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
     .metric-card {
         background: #fff;
@@ -618,6 +631,9 @@ def inject_styles() -> None:
         color: var(--muted);
         font-size: 0.78rem;
         margin-bottom: 0.58rem;
+        line-height: 1.35;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
     .metric-value {
         color: var(--ink);
@@ -625,6 +641,8 @@ def inject_styles() -> None:
         font-size: 1.5rem;
         line-height: 1.1;
         margin-bottom: 0.7rem;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
     .metric-delta {
         display: inline-flex;
@@ -657,11 +675,14 @@ def inject_styles() -> None:
         color: var(--ink);
         font-weight: 700;
         font-size: 0.9rem;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
     }
     .signal-meta {
         color: var(--muted);
         font-size: 0.76rem;
         line-height: 1.55;
+        overflow-wrap: anywhere;
     }
     .tag {
         display: inline-flex;
@@ -873,7 +894,9 @@ def inject_styles() -> None:
     div[data-testid="stRadio"] [role="radiogroup"] label p {
         color: var(--ink) !important;
         font-weight: 600;
-        white-space: nowrap;
+        white-space: normal;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
     }
     div[data-testid="stRadio"] [role="radiogroup"] label,
     div[data-testid="stRadio"] [role="radiogroup"] label div,
@@ -938,6 +961,9 @@ def inject_styles() -> None:
         color: var(--ink);
         min-height: 2.35rem;
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+        white-space: normal;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
     }
     .stButton > button:hover {
         border-color: var(--blue);
@@ -1013,6 +1039,11 @@ def inject_styles() -> None:
         border-bottom: 1px solid var(--line);
         padding: 0.62rem 0;
         font-size: 0.78rem;
+    }
+    .data-row span {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        line-height: 1.35;
     }
     .data-row.header {
         color: var(--muted);
@@ -1186,11 +1217,6 @@ def render_header(title: str, subtitle: str, context: str = "新消费品牌演�
         <div class="eyebrow">InsightOps · 企业市场情报 Agent</div>
         <h1 class="title">{title}</h1>
         <div class="subtitle">{subtitle}</div>
-    </div>
-    <div class="toolbar">
-        <span class="chip">演示行业：{context}</span>
-        <span class="chip">数据层：Mock + 新消费证据库</span>
-        <span class="chip">周期：近 7 天</span>
     </div>
 </div>
 """,
