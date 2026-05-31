@@ -304,6 +304,24 @@ MONITOR_PROJECTS: List[Dict] = [
 
 RISK_EVENTS: List[Dict] = [
     {
+        "id": "SHU-20260531",
+        "level": "高",
+        "title": "小红书爆款负面：精华液过敏辣脸",
+        "platform": "小红书",
+        "trend": "2 小时互动 1,200+，负面评论快速聚集",
+        "owner": "公关风控",
+        "status": "品牌运营已分发",
+        "confidence": 91,
+        "summary": "用户集中反馈 NewBrand 光感修护精华液使用后刺痛泛红，事件发生在 618 大促投放窗口，可能触发产品质量风控边界。",
+        "drivers": {"产品质量体验": 38, "广告温和承诺": 27, "客服处理不清晰": 19, "大促传播放大": 16},
+        "evidence": [
+            "用了两次就过敏辣脸，脸颊刺痛泛红，客服还让我继续观察。",
+            "广告一直讲温和修护，但我用完明显刺痛，这算不算虚假宣传？",
+            "618 还在大推这个精华，建议品牌先把问题解释清楚。",
+        ],
+        "actions": ["生成回应口径", "整理证据摘要", "同步客服 FAQ", "触发营销熔断"],
+    },
+    {
         "id": "R-024",
         "level": "高",
         "title": "广告文案引发价格争议",
@@ -389,11 +407,56 @@ COMPETITORS: List[Dict] = [
 
 
 REPORTS: List[Dict] = [
+    {"name": "突发风控事件处置全周期报告", "type": "风控", "status": "草稿可生成", "owner": "品牌运营", "updated": "刚刚"},
     {"name": "市场情报日报", "type": "日报", "status": "已生成", "owner": "品牌运营", "updated": "今日 09:30"},
     {"name": "广告争议风险简报", "type": "风险", "status": "待审核", "owner": "公关风控", "updated": "今日 10:15"},
     {"name": "竞品 A 新品追踪", "type": "竞品", "status": "生成中", "owner": "竞品策略", "updated": "今日 11:05"},
     {"name": "春季上新活动复盘", "type": "活动", "status": "待补充证据", "owner": "营销增长", "updated": "昨日 18:40"},
 ]
+
+
+PAGES = [
+    "市场情报总览",
+    "Agent 研判中心",
+    "风险事件中心",
+    "竞品情报雷达",
+    "报告中心",
+    "新消费评论证据库",
+]
+
+
+ACTIVE_INCIDENT = {
+    "id": "SHU-20260531",
+    "title": "小红书爆款负面：精华液过敏辣脸",
+    "source": "小红书用户 @美妆纠错本",
+    "summary": "NewBrand 光感修护精华液被吐槽使用后刺痛泛红、严重辣脸，2 小时内互动量破千，评论区出现多名用户共鸣。",
+    "platform": "小红书",
+    "product": "光感修护精华液",
+    "campaign": "618 大促",
+    "trend": "2 小时互动 1,200+，负面评论占比快速上升",
+    "risk_level": "高危",
+    "confidence": 91,
+    "health_drop": "-34",
+    "drivers": {"产品质量体验": 38, "广告温和承诺": 27, "客服处理不清晰": 19, "大促传播放大": 16},
+    "evidence": [
+        "用了两次就过敏辣脸，脸颊刺痛泛红，客服还让我继续观察。",
+        "广告一直讲温和修护，但我用完明显刺痛，这算不算虚假宣传？",
+        "618 还在大推这个精华，建议品牌先把问题解释清楚。",
+    ],
+    "agent_basis": [
+        "命中产品质量与人身体验相关高危词：过敏、刺痛、辣脸、泛红。",
+        "爆款笔记互动速度超过近 7 天同类负面内容 P95 阈值。",
+        "事件发生在 618 大促投放窗口，可能影响转化和达人内容可信度。",
+        "评论证据显示客服口径不一致，需进入人工审核与统一回应流程。",
+    ],
+    "response_draft": "建议回应口径：我们已关注到部分用户关于 NewBrand 光感修护精华液使用后刺痛、泛红的反馈。不同肤质对活性成分的耐受度存在差异，我们已启动样本复核和客服专项跟进。建议用户暂停使用并通过官方客服登记肤质、批次和使用情况，我们将在 24 小时内给出处理方案。后续会补充更清晰的敏感肌使用提示和局部测试建议。",
+    "marketing_actions": [
+        "暂停“敏感肌安心可用”相关 KOC 铺量素材。",
+        "将信息流主卖点从“强功效修护”调整为“温和屏障修护 + 先局部测试”。",
+        "提取吐槽词：辣脸、刺痛、泛红、客服模板化，更新达人 brief 避免绝对化承诺。",
+        "保留真实反馈入口，把高风险评论纳入活动复盘证据。",
+    ],
+}
 
 
 def inject_styles() -> None:
@@ -708,6 +771,74 @@ def inject_styles() -> None:
         line-height: 1.65;
         margin-top: 0.75rem;
     }
+    .incident-card {
+        border: 1px solid #fecaca;
+        background: linear-gradient(180deg, #fff7f7 0%, #ffffff 100%);
+        border-radius: 10px;
+        padding: 1rem;
+        box-shadow: 0 8px 24px rgba(239, 68, 68, 0.08);
+    }
+    .incident-card h3 {
+        color: #991b1b;
+        font-size: 1rem;
+        margin: 0 0 0.45rem;
+    }
+    .incident-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.6rem;
+        margin-top: 0.8rem;
+    }
+    .incident-meta {
+        border: 1px solid #fee2e2;
+        background: #fff;
+        border-radius: 8px;
+        padding: 0.62rem;
+    }
+    .incident-meta span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.72rem;
+    }
+    .incident-meta strong {
+        color: var(--ink);
+        font-size: 0.9rem;
+    }
+    .task-alert {
+        border: 1px solid #fca5a5;
+        border-left: 5px solid var(--red);
+        background: #fff7f7;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 10px 24px rgba(239, 68, 68, 0.08);
+    }
+    .task-alert strong {
+        color: #991b1b;
+    }
+    .timeline {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0.7rem;
+    }
+    .timeline-step {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        padding: 0.75rem;
+        min-height: 108px;
+    }
+    .timeline-step strong {
+        display: block;
+        color: var(--ink);
+        font-size: 0.84rem;
+        margin-bottom: 0.3rem;
+    }
+    .timeline-step span {
+        color: var(--muted);
+        font-size: 0.74rem;
+        line-height: 1.45;
+    }
     .small-note {
         color: var(--muted);
         font-size: 0.76rem;
@@ -963,6 +1094,67 @@ def get_local_sample_stats() -> Dict:
         return {"available": False}
 
 
+def load_evidence_comments(limit: int = 6) -> List[Dict]:
+    path = os.path.join("vector_store", "processed_data.csv")
+    if not os.path.exists(path):
+        return []
+
+    try:
+        df = pd.read_csv(path)
+        if "like_count" in df.columns:
+            df = df.sort_values("like_count", ascending=False)
+        return df.head(limit).to_dict("records")
+    except Exception:
+        return []
+
+
+def ensure_app_state() -> None:
+    ensure_work_view()
+    if st.session_state.get("nav_page") not in PAGES:
+        st.session_state.nav_page = "市场情报总览"
+    if "active_incident_id" not in st.session_state:
+        st.session_state.active_incident_id = None
+    if "trigger_pr_popup" not in st.session_state:
+        st.session_state.trigger_pr_popup = False
+    if "trigger_marketing_alert" not in st.session_state:
+        st.session_state.trigger_marketing_alert = False
+    if "pr_response_approved" not in st.session_state:
+        st.session_state.pr_response_approved = False
+    if "marketing_review_generated" not in st.session_state:
+        st.session_state.marketing_review_generated = False
+    if "incident_report_ready" not in st.session_state:
+        st.session_state.incident_report_ready = False
+
+
+def dispatch_incident_to_pr() -> None:
+    st.session_state.work_view = "公关风控"
+    st.session_state.nav_page = "风险事件中心"
+    st.session_state.active_incident_id = ACTIVE_INCIDENT["id"]
+    st.session_state.trigger_pr_popup = True
+    st.session_state.pr_response_approved = False
+    st.session_state.trigger_marketing_alert = False
+    st.session_state.marketing_review_generated = False
+    st.session_state.incident_report_ready = False
+
+
+def approve_pr_response() -> None:
+    st.session_state.pr_response_approved = True
+    st.session_state.trigger_marketing_alert = True
+    st.session_state.work_view = "营销增长"
+    st.session_state.nav_page = "Agent 研判中心"
+    st.session_state.active_incident_id = ACTIVE_INCIDENT["id"]
+    st.session_state.approved_response_draft = st.session_state.get(
+        "pr_response_draft",
+        ACTIVE_INCIDENT["response_draft"],
+    )
+
+
+def generate_marketing_review() -> None:
+    st.session_state.marketing_review_generated = True
+    st.session_state.incident_report_ready = True
+    st.session_state.nav_page = "报告中心"
+
+
 def ensure_work_view() -> str:
     legacy_role_map = {
         "市场运营负责人": "品牌运营",
@@ -997,7 +1189,7 @@ def render_header(title: str, subtitle: str, context: str = "新消费品牌演�
     </div>
     <div class="toolbar">
         <span class="chip">演示行业：{context}</span>
-        <span class="chip">数据层：Mock + 样例评论库</span>
+        <span class="chip">数据层：Mock + 新消费证据库</span>
         <span class="chip">周期：近 7 天</span>
     </div>
 </div>
@@ -1195,6 +1387,137 @@ def render_signal_card(event: Dict) -> None:
     )
 
 
+def render_incident_dispatch_card() -> None:
+    incident = ACTIVE_INCIDENT
+    st.markdown(
+        f"""
+<div class="incident-card">
+    <div class="signal-top">
+        <div>
+            <div class="eyebrow">Risk-LLM · 实时高危信号拦截</div>
+            <h3>{incident["title"]}</h3>
+        </div>
+        <span class="tag tag-high">{incident["risk_level"]}</span>
+    </div>
+    <div class="signal-meta">
+        {incident["source"]}：{incident["summary"]}
+    </div>
+    <div class="incident-meta-grid">
+        <div class="incident-meta"><span>传播速度</span><strong>{incident["trend"]}</strong></div>
+        <div class="incident-meta"><span>风险定级</span><strong>{incident["risk_level"]} · {incident["confidence"]}%</strong></div>
+        <div class="incident-meta"><span>业务窗口</span><strong>{incident["campaign"]}</strong></div>
+        <div class="incident-meta"><span>舆情健康度</span><strong>{incident["health_drop"]} pts</strong></div>
+    </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+    st.warning(
+        "Agent 研判依据：命中产品质量与人身体验高危词，互动速度超过同类负面 P95 阈值，"
+        "且发生在 618 大促投放窗口，建议立即进入公关风控工单。"
+    )
+    st.button(
+        "一键介入并分发至公关",
+        key="dispatch_active_incident",
+        type="primary",
+        use_container_width=True,
+        on_click=dispatch_incident_to_pr,
+    )
+
+
+def render_pr_task_panel() -> None:
+    incident = ACTIVE_INCIDENT
+    st.markdown(
+        f"""
+<div class="task-alert">
+    <strong>新任务紧急提醒：舆情危机介入</strong><br>
+    事件来源：品牌运营团队一键分发 · 工单编号：{incident["id"]}<br>
+    危机摘要：{incident["summary"]}
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    st.error(f"高危事件：{incident['source']} 发布关于“{incident['product']}”过敏辣脸投诉，已进入一级响应窗口。")
+    st.warning(
+        "Agent 研判结论：已触发产品质量风控边界，舆情健康度急剧下跌，"
+        "预估影响本周大促转化，建议立即启动一级回应口径并同步营销侧熔断策略。"
+    )
+    if st.button("立即进入工单处理", key="open_pr_ticket", type="primary"):
+        st.session_state.trigger_pr_popup = False
+        st.rerun()
+
+
+def render_pr_response_workspace() -> None:
+    incident = ACTIVE_INCIDENT
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    panel_title("人机协同回应口径", "HITL 审核")
+    left, right = st.columns([1.15, 0.85], gap="medium")
+    with left:
+        draft = st.text_area(
+            "Agent 生成草稿",
+            value=incident["response_draft"],
+            height=180,
+            key="pr_response_draft",
+        )
+        st.button(
+            "审核通过并下发给营销增长",
+            key="approve_pr_response",
+            type="primary",
+            use_container_width=True,
+            on_click=approve_pr_response,
+        )
+    with right:
+        st.markdown("**口径策略**")
+        for strategy in ["先承认已关注反馈", "避免直接否认用户体验", "引导登记肤质与批次", "承诺 24 小时处理窗口"]:
+            st.markdown(f'<div class="evidence">{strategy}</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_marketing_alert_panel() -> None:
+    incident = ACTIVE_INCIDENT
+    st.markdown('<div class="task-alert">', unsafe_allow_html=True)
+    st.markdown(
+        f"<strong>大促活动熔断与素材优化警报</strong><br>{incident['product']} 负面事件已由公关风控下发，营销侧需调整 618 大促投放策略。",
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.info("Agent 建议：暂停高风险素材，弱化绝对化功效承诺，改用“温和修护 + 局部测试 + 客服登记”表达。")
+
+    cols = st.columns(2)
+    for idx, action in enumerate(incident["marketing_actions"]):
+        with cols[idx % 2]:
+            st.checkbox(action, value=True, key=f"marketing_action_{idx}")
+
+    st.button(
+        "生成活动复盘骨架并进入报告中心",
+        key="generate_marketing_review",
+        type="primary",
+        on_click=generate_marketing_review,
+    )
+
+
+def render_incident_report_preview() -> None:
+    incident = ACTIVE_INCIDENT
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    panel_title("突发风控事件处置全周期报告", "管理层可读")
+    st.markdown(f"#### {incident['title']}")
+    st.markdown(f'<div class="small-note">{incident["summary"]}</div>', unsafe_allow_html=True)
+    timeline = [
+        ("监测拦截", "Risk-LLM 捕捉小红书爆款负面，判定为高危产品体验事件。"),
+        ("Agent 研判", "提取过敏、刺痛、辣脸、客服模板化等证据，评估大促影响。"),
+        ("公关处置", "生成一级回应口径，由公关风控审核后下发客服和社媒团队。"),
+        ("营销调整", "暂停高风险素材，调整达人 brief 和信息流卖点表达。"),
+        ("资产沉淀", "形成风控事件报告、复盘骨架和后续观察指标。"),
+    ]
+    html = ['<div class="timeline">']
+    for title, desc in timeline:
+        html.append(f'<div class="timeline-step"><strong>{title}</strong><span>{desc}</span></div>')
+    html.append("</div>")
+    st.markdown("".join(html), unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
 def render_workflow() -> None:
     steps = [
         ("配置监测", "品牌词、竞品词、活动词、风险词"),
@@ -1225,6 +1548,12 @@ def render_market_dashboard() -> None:
     main_col, copilot_col = st.columns([2.65, 1], gap="medium")
 
     with main_col:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("实时高危信号拦截队列", "主动拦截 -> 自动研判 -> 一键分发")
+        render_incident_dispatch_card()
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.write("")
+
         row1_left, row1_mid, row1_right = st.columns([1.18, 1.08, 0.98], gap="medium")
         with row1_left:
             st.markdown('<div class="panel">', unsafe_allow_html=True)
@@ -1301,6 +1630,10 @@ def render_agent_center() -> None:
         f"当前工作视角：{work_view}。Agent 会按该视角重排信号队列、待办任务和建议输出物。",
     )
 
+    if work_view == "营销增长" and st.session_state.get("trigger_marketing_alert"):
+        render_marketing_alert_panel()
+        st.write("")
+
     stage_cols = st.columns(4)
     stage_metrics = [
         ("捕捉信号", "23", "较昨日 +6", "up"),
@@ -1366,7 +1699,7 @@ def render_agent_center() -> None:
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.write("")
-    render_copilot("高风险事件 R-024", RISK_EVENTS[0])
+    render_copilot(f"高风险事件 {RISK_EVENTS[0]['id']}", RISK_EVENTS[0])
 
 
 def render_risk_center() -> None:
@@ -1374,13 +1707,24 @@ def render_risk_center() -> None:
     view = current_work_view()
     render_header("风险事件中心", f"当前工作视角：{work_view}。同一风险事件会按不同业务职责给出解释重点和处置动作。")
 
+    if st.session_state.get("trigger_pr_popup"):
+        render_pr_task_panel()
+
     list_col, detail_col = st.columns([1, 1.6])
 
     with list_col:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
         panel_title("风险列表", "按紧急度排序")
         labels = [f'{event["id"]} · {event["title"]}' for event in RISK_EVENTS]
-        selected_label = st.radio("选择风险事件", labels, label_visibility="collapsed")
+        active_id = st.session_state.get("active_incident_id")
+        default_index = next((idx for idx, event in enumerate(RISK_EVENTS) if event["id"] == active_id), 0)
+        selected_label = st.radio(
+            "选择风险事件",
+            labels,
+            index=default_index,
+            key=f"risk_event_selector_{active_id or 'default'}",
+            label_visibility="collapsed",
+        )
         selected_index = labels.index(selected_label)
         for event in RISK_EVENTS:
             render_signal_card(event)
@@ -1426,6 +1770,12 @@ def render_risk_center() -> None:
             with col:
                 st.button(action, key=f"{event['id']}_{work_view}_{action}", use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
+
+    if event["id"] == ACTIVE_INCIDENT["id"]:
+        st.write("")
+        render_pr_response_workspace()
+        if st.session_state.get("pr_response_approved"):
+            st.success("回应口径已审核通过，并已下发给营销增长进入活动熔断与素材优化流程。")
 
     st.write("")
     render_copilot(f"风险事件 {event['id']}", event)
@@ -1494,6 +1844,10 @@ def render_report_center() -> None:
     defaults = view["report_defaults"]
     render_header("报告中心", f"当前工作视角：{work_view}。报告生成器会自动预设报告类型、目标读者和默认模块。")
 
+    if st.session_state.get("active_incident_id") == ACTIVE_INCIDENT["id"]:
+        render_incident_report_preview()
+        st.write("")
+
     left, right = st.columns([1.2, 1])
     with left:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
@@ -1544,23 +1898,22 @@ def render_report_center() -> None:
 
 def render_sample_data_lab() -> None:
     work_view = ensure_work_view()
-    render_header("样例评论库", f"当前工作视角：{work_view}。本页保留旧后端能力作为技术链路展示，不强行绑定新消费品牌业务场景。")
+    render_header("新消费评论证据库", f"当前工作视角：{work_view}。本页展示护肤/美妆品牌评论证据与本地 RAG 技术链路。")
 
     stats = get_local_sample_stats()
     api_online = check_api_status()
 
     cols = st.columns(4)
     cols[0].metric("后端 API", "在线" if api_online else "离线")
-    cols[1].metric("样例评论", stats.get("count", 0) if stats.get("available") else "未加载")
-    cols[2].metric("数据定位", "小红书生育评论")
-    cols[3].metric("产品层", "Mock 业务数据")
+    cols[1].metric("证据评论", stats.get("count", 0) if stats.get("available") else "未加载")
+    cols[2].metric("数据定位", "护肤/美妆评论")
+    cols[3].metric("向量库", "TF-IDF 本地检索")
 
     st.markdown(
         """
 <div class="small-note">
-说明：当前真实数据库来自历史爬取的小红书“生育”关键词评论。它可以证明评论检索和 RAG 技术链路，
-但不适合作为新消费品牌市场情报 Agent 的业务依据。因此主产品原型使用新消费品牌 Mock 数据，
-本页仅作为“部分功能可用”的技术展示区。
+说明：当前证据库已替换为新消费护肤/美妆品牌评论 Mock 数据，用于支撑过敏辣脸、广告承诺、客服口径、
+大促投放等市场情报场景。它用于演示评论检索、情感分析、主题聚类和 RAG 查询链路。
 </div>
 """,
         unsafe_allow_html=True,
@@ -1591,14 +1944,39 @@ def render_sample_data_lab() -> None:
         st.plotly_chart(fig, use_container_width=True)
 
     st.write("")
+    evidence = load_evidence_comments(limit=6)
+    if evidence:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("高互动评论证据", "来自本地新消费证据库")
+        for row in evidence:
+            sentiment = row.get("sentiment", "neutral")
+            tag_class = {"positive": "tag-run", "negative": "tag-high", "neutral": "tag-mid"}.get(sentiment, "tag-low")
+            platform = row.get("platform", "社媒")
+            product = row.get("product", "产品")
+            likes = int(row.get("like_count", 0))
+            st.markdown(
+                f"""
+<div class="signal-card">
+    <div class="signal-top">
+        <div class="signal-title">{platform} · {product}</div>
+        <span class="tag {tag_class}">{sentiment}</span>
+    </div>
+    <div class="signal-meta">{row.get("content", "")}<br>互动：{likes} 赞 · 风险标签：{row.get("risk_label", "观察")}</div>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.write("")
     st.markdown('<div class="panel">', unsafe_allow_html=True)
-    panel_title("样例 RAG 查询", "仅在后端服务启动时可用")
-    question = st.text_input("查询样例评论库", value="当前负面情绪主要集中在哪些方面？")
-    if st.button("查询样例库", type="primary"):
+    panel_title("新消费 RAG 查询", "仅在后端服务启动时可用")
+    question = st.text_input("查询新消费评论证据库", value="精华液过敏辣脸相关负面情绪主要集中在哪些方面？")
+    if st.button("查询证据库", type="primary"):
         result = query_sample_rag(question)
         if result:
             st.markdown(f'<div class="answer-box">{result.get("answer", "")}</div>', unsafe_allow_html=True)
-            st.caption(f"检索到 {result.get('retrieval_count', 0)} 条样例评论。")
+            st.caption(f"检索到 {result.get('retrieval_count', 0)} 条新消费评论。")
         else:
             st.warning("后端未启动或查询失败。可先运行 start.bat 启动 API 服务。")
     st.markdown("</div>", unsafe_allow_html=True)
@@ -1663,21 +2041,15 @@ def render_sidebar() -> str:
     st.sidebar.markdown("---")
     page = st.sidebar.radio(
         "导航",
-        [
-            "市场情报总览",
-            "Agent 研判中心",
-            "风险事件中心",
-            "竞品情报雷达",
-            "报告中心",
-            "样例评论库",
-        ],
+        PAGES,
+        key="nav_page",
     )
     st.sidebar.markdown("---")
     st.sidebar.caption("数据更新")
     st.sidebar.markdown(
         """
 - 新消费品牌 Mock 数据
-- 旧 RAG 链路局部保留
+- 新消费评论证据库
 - 2 分钟前同步
 """
     )
@@ -1692,8 +2064,8 @@ def render_sidebar() -> str:
 
 def main() -> None:
     inject_styles()
+    ensure_app_state()
     page = render_sidebar()
-    ensure_work_view()
     render_topbar()
 
     if page == "市场情报总览":

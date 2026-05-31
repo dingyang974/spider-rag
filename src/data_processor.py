@@ -14,19 +14,18 @@ class DataProcessor:
     def load_data(self) -> pd.DataFrame:
         logger.info(f"Loading data from {self.data_path}")
         
-        try:
-            self.df = pd.read_csv(self.data_path, encoding='gb18030', on_bad_lines='skip', encoding_errors='replace')
-            logger.info(f"Loaded {len(self.df)} records with encoding: gb18030")
-            return self.df
-        except Exception as e:
-            logger.error(f"Error loading with gb18030: {e}")
-        
-        try:
-            self.df = pd.read_csv(self.data_path, encoding='gbk', on_bad_lines='skip', encoding_errors='replace')
-            logger.info(f"Loaded {len(self.df)} records with encoding: gbk")
-            return self.df
-        except Exception as e:
-            logger.error(f"Error loading with gbk: {e}")
+        for encoding in ["utf-8-sig", "utf-8", "gb18030", "gbk"]:
+            try:
+                self.df = pd.read_csv(
+                    self.data_path,
+                    encoding=encoding,
+                    on_bad_lines='skip',
+                    encoding_errors='replace',
+                )
+                logger.info(f"Loaded {len(self.df)} records with encoding: {encoding}")
+                return self.df
+            except Exception as e:
+                logger.error(f"Error loading with {encoding}: {e}")
         
         raise ValueError(f"无法读取文件 {self.data_path}")
     
