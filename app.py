@@ -1225,7 +1225,6 @@ def render_header(title: str, subtitle: str, context: str = "新消费品牌演�
 
 def render_topbar() -> None:
     work_view = ensure_work_view()
-    view = ROLE_VIEWS[work_view]
     st.markdown(
         f"""
 <div class="topbar">
@@ -1243,16 +1242,12 @@ def render_topbar() -> None:
 """,
         unsafe_allow_html=True,
     )
-    switch_col, hint_col = st.columns([1.65, 1], gap="medium")
-    with switch_col:
-        st.radio(
-            "当前工作视角",
-            list(ROLE_VIEWS.keys()),
-            horizontal=True,
-            key="work_view",
-        )
-    with hint_col:
-        st.markdown(f'<div class="small-note" style="padding-top:1.85rem;">{view["subtitle"]}</div>', unsafe_allow_html=True)
+    st.radio(
+        "当前工作视角",
+        list(ROLE_VIEWS.keys()),
+        horizontal=True,
+        key="work_view",
+    )
 
 
 def metric_card(label: str, value: str, delta: str, tone: str) -> None:
