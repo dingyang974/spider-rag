@@ -415,14 +415,15 @@ REPORTS: List[Dict] = [
 ]
 
 
-PAGES = [
+BUSINESS_PAGES = [
     "市场情报总览",
     "Agent 研判中心",
     "风险事件中心",
     "竞品情报雷达",
     "报告中心",
-    "新消费评论证据库",
 ]
+EVIDENCE_PAGE = "新消费评论证据库"
+PAGES = BUSINESS_PAGES + [EVIDENCE_PAGE]
 
 
 ACTIVE_INCIDENT = {
@@ -628,6 +629,78 @@ def inject_styles() -> None:
         text-align: right;
         white-space: normal;
         overflow-wrap: anywhere;
+    }
+    .focus-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 1rem;
+        min-height: 265px;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+    }
+    .focus-card.danger {
+        border-color: #fecaca;
+        background: linear-gradient(180deg, #fff7f7 0%, #ffffff 66%);
+    }
+    .focus-card.insight {
+        border-color: #bfdbfe;
+        background: linear-gradient(180deg, #eff6ff 0%, #ffffff 70%);
+    }
+    .focus-card.action {
+        border-color: #bbf7d0;
+        background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 70%);
+    }
+    .focus-label {
+        color: var(--muted);
+        font-size: 0.76rem;
+        font-weight: 700;
+    }
+    .focus-title {
+        color: var(--ink);
+        font-size: 1.02rem;
+        line-height: 1.35;
+        font-weight: 780;
+    }
+    .focus-body {
+        color: var(--muted);
+        font-size: 0.84rem;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
+    }
+    .focus-metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
+    }
+    .focus-metric {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.55rem;
+        background: rgba(255,255,255,0.72);
+    }
+    .focus-metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 0.72rem;
+        margin-bottom: 0.18rem;
+    }
+    .focus-metric strong {
+        color: var(--ink);
+        font-size: 0.9rem;
+    }
+    .section-heading {
+        margin: 1.15rem 0 0.35rem;
+        color: var(--ink);
+        font-weight: 760;
+        font-size: 1rem;
+    }
+    .section-note {
+        color: var(--muted);
+        font-size: 0.82rem;
+        margin-bottom: 0.35rem;
     }
     .metric-card {
         background: #fff;
@@ -1153,6 +1226,11 @@ def ensure_app_state() -> None:
     ensure_work_view()
     if st.session_state.get("nav_page") not in PAGES:
         st.session_state.nav_page = "市场情报总览"
+    if st.session_state.get("flow_page") not in BUSINESS_PAGES:
+        if st.session_state.nav_page in BUSINESS_PAGES:
+            st.session_state.flow_page = st.session_state.nav_page
+        else:
+            st.session_state.flow_page = "市场情报总览"
     if "active_incident_id" not in st.session_state:
         st.session_state.active_incident_id = None
     if "trigger_pr_popup" not in st.session_state:
@@ -1167,9 +1245,18 @@ def ensure_app_state() -> None:
         st.session_state.incident_report_ready = False
 
 
+def sync_flow_page() -> None:
+    st.session_state.nav_page = st.session_state.flow_page
+
+
+def open_evidence_page() -> None:
+    st.session_state.nav_page = EVIDENCE_PAGE
+
+
 def dispatch_incident_to_pr() -> None:
     st.session_state.work_view = "公关风控"
     st.session_state.nav_page = "风险事件中心"
+    st.session_state.flow_page = "风险事件中心"
     st.session_state.active_incident_id = ACTIVE_INCIDENT["id"]
     st.session_state.trigger_pr_popup = True
     st.session_state.pr_response_approved = False
@@ -1183,6 +1270,7 @@ def approve_pr_response() -> None:
     st.session_state.trigger_marketing_alert = True
     st.session_state.work_view = "营销增长"
     st.session_state.nav_page = "Agent 研判中心"
+    st.session_state.flow_page = "Agent 研判中心"
     st.session_state.active_incident_id = ACTIVE_INCIDENT["id"]
     st.session_state.approved_response_draft = st.session_state.get(
         "pr_response_draft",
@@ -1194,6 +1282,7 @@ def generate_marketing_review() -> None:
     st.session_state.marketing_review_generated = True
     st.session_state.incident_report_ready = True
     st.session_state.nav_page = "报告中心"
+    st.session_state.flow_page = "报告中心"
 
 
 def ensure_work_view() -> str:
@@ -1234,13 +1323,11 @@ def render_header(title: str, subtitle: str, context: str = "新消费品牌演�
 
 
 def render_topbar() -> None:
-    work_view = ensure_work_view()
     st.markdown(
         f"""
 <div class="topbar">
     <div class="topbar-left">
         <span>当前空间：NewBrand 团队</span>
-        <span class="chip">当前工作视角：{work_view}</span>
         <span class="chip">近 7 天</span>
         <span class="chip">自定义看板</span>
     </div>
@@ -1252,12 +1339,9 @@ def render_topbar() -> None:
 """,
         unsafe_allow_html=True,
     )
-    st.radio(
-        "当前工作视角",
-        list(ROLE_VIEWS.keys()),
-        horizontal=True,
-        key="work_view",
-    )
+    selector_col, _ = st.columns([0.32, 0.68])
+    with selector_col:
+        st.selectbox("当前工作视角", list(ROLE_VIEWS.keys()), key="work_view")
 
 
 def metric_card(label: str, value: str, delta: str, tone: str) -> None:
@@ -1456,6 +1540,81 @@ def render_incident_dispatch_card() -> None:
     )
 
 
+def render_market_focus_cards(work_view: str, view: Dict) -> None:
+    incident = ACTIVE_INCIDENT
+    focus_cols = st.columns([1.08, 1.08, 0.92], gap="medium")
+
+    with focus_cols[0]:
+        st.markdown(
+            f"""
+<div class="focus-card danger">
+    <div class="focus-label">今日关键情报</div>
+    <div class="signal-top">
+        <div class="focus-title">{incident["title"]}</div>
+        <span class="tag tag-high">{incident["risk_level"]}</span>
+    </div>
+    <div class="focus-body">
+        {incident["source"]}：{incident["summary"]}
+    </div>
+    <div class="focus-metrics">
+        <div class="focus-metric"><span>平台</span><strong>{incident["platform"]}</strong></div>
+        <div class="focus-metric"><span>业务窗口</span><strong>{incident["campaign"]}</strong></div>
+        <div class="focus-metric"><span>传播速度</span><strong>2 小时破千</strong></div>
+        <div class="focus-metric"><span>风险置信度</span><strong>{incident["confidence"]}%</strong></div>
+    </div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+    with focus_cols[1]:
+        st.markdown(
+            f"""
+<div class="focus-card insight">
+    <div class="focus-label">Agent 研判结论</div>
+    <div class="focus-title">已触发产品体验与大促投放双重风控边界</div>
+    <div class="focus-body">
+        Risk-LLM 命中“刺痛、泛红、严重辣脸”等身体体验高危词；
+        互动速度超过同类负面 P95 阈值，且正在影响 618 投放窗口。
+    </div>
+    <div class="focus-metrics">
+        <div class="focus-metric"><span>舆情健康度</span><strong>{incident["health_drop"]} pts</strong></div>
+        <div class="focus-metric"><span>主要归因</span><strong>质量体验</strong></div>
+        <div class="focus-metric"><span>当前视角</span><strong>{work_view}</strong></div>
+        <div class="focus-metric"><span>建议产物</span><strong>{view["agent_output"]}</strong></div>
+    </div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+    with focus_cols[2]:
+        st.markdown(
+            f"""
+<div class="focus-card action">
+    <div class="focus-label">下一步动作</div>
+    <div class="focus-title">从发现信号进入跨部门处置</div>
+    <div class="focus-body">
+        先由品牌运营确认优先级，再分发至公关风控生成回应口径；
+        营销增长同步评估广告素材和投放节奏。
+    </div>
+    <div class="signal-card">
+        <div class="signal-title">{view["focus"][0]}</div>
+        <div class="signal-meta">建议负责人：{work_view} · 状态：待处理</div>
+    </div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+        st.button(
+            "一键介入并分发至公关",
+            key="dispatch_active_incident_focus",
+            type="primary",
+            use_container_width=True,
+            on_click=dispatch_incident_to_pr,
+        )
+
+
 def render_pr_task_panel() -> None:
     incident = ACTIVE_INCIDENT
     st.markdown(
@@ -1568,6 +1727,15 @@ def render_market_dashboard() -> None:
     view = current_work_view()
     render_header("市场情报总览", f"当前工作视角：{work_view}。{view['subtitle']}")
 
+    render_market_focus_cards(work_view, view)
+
+    st.markdown(
+        """
+<div class="section-heading">下沉信息 · 运营监测明细</div>
+<div class="section-note">以下内容用于展开复盘、辅助研判和交叉验证，不再抢占首页第一屏。</div>
+""",
+        unsafe_allow_html=True,
+    )
     metric_cols = st.columns(5)
     metrics = view["metrics"] + [("情报覆盖平台", "42", "新增 3", "ok")]
     for col, metric in zip(metric_cols, metrics):
@@ -1575,15 +1743,9 @@ def render_market_dashboard() -> None:
             metric_card(*metric)
 
     st.write("")
-    main_col, copilot_col = st.columns([2.65, 1], gap="medium")
+    main_col, copilot_col = st.columns([2.55, 1], gap="medium")
 
     with main_col:
-        st.markdown('<div class="panel">', unsafe_allow_html=True)
-        panel_title("实时高危信号拦截队列", "主动拦截 -> 自动研判 -> 一键分发")
-        render_incident_dispatch_card()
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.write("")
-
         row1_left, row1_mid, row1_right = st.columns([1.18, 1.08, 0.98], gap="medium")
         with row1_left:
             st.markdown('<div class="panel">', unsafe_allow_html=True)
@@ -2069,27 +2231,41 @@ def render_sidebar() -> str:
         unsafe_allow_html=True,
     )
     st.sidebar.markdown("---")
-    page = st.sidebar.radio(
-        "导航",
-        PAGES,
-        key="nav_page",
+    st.sidebar.radio(
+        "业务流程",
+        BUSINESS_PAGES,
+        key="flow_page",
+        on_change=sync_flow_page,
     )
     st.sidebar.markdown("---")
-    st.sidebar.caption("数据更新")
+    st.sidebar.caption("数据来源 / 证据库")
     st.sidebar.markdown(
         """
 - 新消费品牌 Mock 数据
-- 新消费评论证据库
+- 500 条新消费评论证据
+- 本地 TF-IDF 向量库
 - 2 分钟前同步
 """
     )
+    if st.sidebar.button(
+        "打开新消费评论证据库",
+        key="open_evidence_library",
+        type="primary" if st.session_state.nav_page == EVIDENCE_PAGE else "secondary",
+        use_container_width=True,
+    ):
+        open_evidence_page()
+        st.rerun()
+    if st.session_state.nav_page == EVIDENCE_PAGE:
+        if st.sidebar.button("返回当前业务流程", key="back_to_flow_page", use_container_width=True):
+            st.session_state.nav_page = st.session_state.flow_page
+            st.rerun()
     st.sidebar.markdown("---")
     api_online = check_api_status()
     if api_online:
         st.sidebar.success("API 在线")
     else:
         st.sidebar.warning("API 未启动")
-    return page
+    return st.session_state.nav_page
 
 
 def main() -> None:
