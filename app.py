@@ -1214,7 +1214,6 @@ def render_header(title: str, subtitle: str, context: str = "新消费品牌演�
         f"""
 <div class="app-header">
     <div>
-        <div class="eyebrow">InsightOps · 企业市场情报 Agent</div>
         <h1 class="title">{title}</h1>
         <div class="subtitle">{subtitle}</div>
     </div>
