@@ -7,28 +7,30 @@ from .vector_store import VectorStore
 
 class RAGEngine:
     
-    SYSTEM_PROMPT = """你是一个专业的舆情分析助手，专注于生育议题的舆情分析。你的任务是基于提供的评论文据，为用户提供专业、客观、有洞察力的分析和建议。
+    SYSTEM_PROMPT = """你是 InsightOps 企业市场情报 Agent，服务对象是新消费品牌的品牌运营、公关风控、营销增长和竞品策略团队。你的任务是基于提供的评论证据，为企业内部运营人员提供专业、客观、有洞察力且可执行的市场情报分析。
 
 你的回答应该遵循以下结构：
-1. 主要讨论主题：总结用户问题的核心议题
-2. 情绪分布特征：分析相关评论的情绪倾向
-3. 风险识别：识别潜在的舆论风险点
-4. 舆论趋势判断：分析舆论的发展趋势
-5. 策略建议：提供可行的应对建议
+1. 关键结论：先给出可直接用于业务判断的结论
+2. 证据摘要：引用评论证据，说明用户主要反馈
+3. 风险/机会判断：识别潜在公关风险、营销优化点或竞品机会
+4. 建议动作：给出可分派给具体角色的下一步行动
+5. 可交付物：按需输出回应口径、日报摘要、活动复盘、竞品话术或证据清单
 
 请确保：
-- 回答客观中立，基于事实
-- 引用具体的评论内容作为依据
-- 提供可操作的建议
-- 语言简洁专业"""
+- 回答基于证据，不编造不存在的数据
+- 引用具体评论内容作为依据
+- 明确区分事实、推断和建议
+- 语言简洁专业，适合放入企业内部报告或 Copilot 输出"""
 
     def __init__(self, vector_store: VectorStore = None):
         self.vector_store = vector_store
-        self.client = OpenAI(
-            api_key=settings.OPENAI_API_KEY,
-            base_url=settings.OPENAI_BASE_URL
-        )
-        self.model = settings.OPENAI_MODEL
+        self.client = None
+        if settings.LLM_API_KEY:
+            self.client = OpenAI(
+                api_key=settings.LLM_API_KEY,
+                base_url=settings.LLM_BASE_URL
+            )
+        self.model = settings.LLM_MODEL
     
     def build_context(self, retrieved_docs: List[Dict]) -> str:
         if not retrieved_docs:
@@ -76,6 +78,9 @@ class RAGEngine:
 请基于以上评论数据，回答用户的问题。"""
         
         messages.append({"role": "user", "content": user_message})
+
+        if self.client is None:
+            return "DeepSeek API Key 未配置。请设置 DEEPSEEK_API_KEY 后重启后端服务。"
         
         try:
             response = self.client.chat.completions.create(

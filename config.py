@@ -3,9 +3,13 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+
     OPENAI_API_KEY: str = ""
-    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
-    OPENAI_MODEL: str = "gpt-3.5-turbo"
+    OPENAI_BASE_URL: str = "https://api.deepseek.com"
+    OPENAI_MODEL: str = "deepseek-chat"
     
     EMBEDDING_MODEL: str = "text-embedding-ada-002"
     EMBEDDING_DIMENSION: int = 1536
@@ -16,6 +20,18 @@ class Settings(BaseSettings):
     
     TOP_K_RETRIEVAL: int = 10
     MAX_TOKENS: int = 2000
+
+    @property
+    def LLM_API_KEY(self) -> str:
+        return self.DEEPSEEK_API_KEY or self.OPENAI_API_KEY
+
+    @property
+    def LLM_BASE_URL(self) -> str:
+        return self.DEEPSEEK_BASE_URL or self.OPENAI_BASE_URL
+
+    @property
+    def LLM_MODEL(self) -> str:
+        return self.DEEPSEEK_MODEL or self.OPENAI_MODEL
     
     class Config:
         env_file = ".env"

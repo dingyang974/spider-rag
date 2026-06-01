@@ -32,9 +32,9 @@ uvicorn api.main:app --host 0.0.0.0 --port $PORT
 Required backend environment variables:
 
 ```bash
-OPENAI_API_KEY=...
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-3.5-turbo
+DEEPSEEK_API_KEY=...
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
 DATA_PATH=./data/comments.csv
 VECTOR_STORE_PATH=./vector_store
 LOG_PATH=./logs

@@ -35,6 +35,45 @@ global_state = {
 }
 
 
+def load_existing_dataframe() -> None:
+    """Load tabular data for statistics-style APIs when a vector store already exists."""
+    candidates = [
+        os.path.join(settings.VECTOR_STORE_PATH, "processed_data.csv"),
+        settings.DATA_PATH,
+    ]
+
+    for data_path in candidates:
+        if not os.path.exists(data_path):
+            continue
+
+        try:
+            if os.path.basename(data_path) == "processed_data.csv":
+                df = pd.read_csv(data_path, encoding="utf-8-sig")
+            else:
+                df = DataProcessor(data_path).process()
+
+            sentiment_analyzer = SentimentAnalyzer()
+            if "sentiment" not in df.columns or "sentiment_score" not in df.columns:
+                df = sentiment_analyzer.analyze_dataframe(df)
+            global_state["sentiment_analyzer"] = sentiment_analyzer
+
+            if "content" in df.columns and len(df) > 0:
+                try:
+                    topic_modeler = TopicModeler(n_topics=5, n_words=10)
+                    topic_modeler.fit(df)
+                    global_state["topic_modeler"] = topic_modeler
+                except Exception as topic_error:
+                    logger.warning(f"Could not initialize topic model from {data_path}: {topic_error}")
+
+            global_state["df"] = df
+            logger.info(f"Loaded tabular data from {data_path}: {len(df)} rows")
+            return
+        except Exception as e:
+            logger.warning(f"Could not load tabular data from {data_path}: {e}")
+
+    logger.warning("No tabular data file found for statistics APIs")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing application...")
@@ -48,6 +87,8 @@ async def lifespan(app: FastAPI):
             logger.info("Loaded existing vector store")
     except Exception as e:
         logger.warning(f"Could not load existing vector store: {e}")
+
+    load_existing_dataframe()
     
     yield
     
@@ -55,8 +96,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="生育议题舆情智能分析与决策助手",
-    description="基于RAG的舆情智能问答系统API",
+    title="InsightOps 企业市场情报 Agent API",
+    description="基于新消费评论证据库和 DeepSeek 的企业市场情报 RAG API",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -85,7 +126,7 @@ def get_dataframe() -> pd.DataFrame:
 @app.get("/")
 async def root():
     return {
-        "message": "生育议题舆情智能分析与决策助手 API",
+        "message": "InsightOps 企业市场情报 Agent API",
         "version": "1.0.0",
         "status": "initialized" if global_state["is_initialized"] else "not_initialized"
     }
@@ -97,7 +138,10 @@ async def health_check():
         "status": "healthy",
         "vector_store": global_state["vector_store"] is not None,
         "rag_engine": global_state["rag_engine"] is not None,
-        "data_loaded": global_state["df"] is not None
+        "data_loaded": global_state["df"] is not None,
+        "llm_provider": "deepseek",
+        "llm_model": settings.LLM_MODEL,
+        "llm_configured": bool(settings.LLM_API_KEY)
     }
 
 

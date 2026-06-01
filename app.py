@@ -1,3 +1,4 @@
+import html
 import os
 from typing import Dict, List, Optional
 
@@ -62,11 +63,6 @@ ROLE_VIEWS: Dict[str, Dict] = {
         "risk_lens": "品牌运营视角优先判断影响面、负责人和升级机制，重点看事件是否需要跨团队协同处置。",
         "risk_actions": ["分派负责人", "加入今日风险简报", "创建跨团队跟进", "追踪 48 小时扩散"],
         "competitor_focus": "关注竞品变化是否影响本品牌声量结构，并把风险、机会和待跟进事项同步到日报。",
-        "report_defaults": {
-            "type": "市场情报日报",
-            "audience": "品牌运营负责人",
-            "modules": ["关键结论", "风险事件", "竞品变化", "建议动作"],
-        },
         "copilot_commands": [
             {
                 "button": "生成日报",
@@ -117,11 +113,6 @@ ROLE_VIEWS: Dict[str, Dict] = {
         "risk_lens": "公关风控视角优先判断事实边界、传播速度和回应窗口，重点看是否会从用户吐槽升级为媒体议题。",
         "risk_actions": ["生成回应口径", "整理证据摘要", "标记高赞负评", "同步客服 FAQ"],
         "competitor_focus": "关注竞品对比是否加剧负面情绪，优先提取可公开回应的事实点，避免陷入无依据对比。",
-        "report_defaults": {
-            "type": "风险事件简报",
-            "audience": "公关风控负责人",
-            "modules": ["风险事件", "证据评论", "建议动作", "下周观察点"],
-        },
         "copilot_commands": [
             {
                 "button": "生成回应口径",
@@ -172,11 +163,6 @@ ROLE_VIEWS: Dict[str, Dict] = {
         "risk_lens": "营销增长视角优先判断争议是否来自素材表达、卖点承诺或投放人群错配，重点反推下一轮投放如何改。",
         "risk_actions": ["定位反感点", "生成素材优化建议", "标记不可复用表达", "加入活动复盘"],
         "competitor_focus": "关注竞品素材、达人测评和促销表达中哪些内容带来有效声量，可转化为下一轮投放假设。",
-        "report_defaults": {
-            "type": "营销活动复盘",
-            "audience": "营销增长负责人",
-            "modules": ["关键结论", "证据评论", "建议动作", "下周观察点"],
-        },
         "copilot_commands": [
             {
                 "button": "生成活动复盘",
@@ -227,11 +213,6 @@ ROLE_VIEWS: Dict[str, Dict] = {
         "risk_lens": "竞品策略视角优先判断负面讨论能否转化为对比机会，重点看竞品优势是否正在重塑用户决策标准。",
         "risk_actions": ["生成竞品对比卡", "更新销售话术", "提取机会线索", "加入竞品周报"],
         "competitor_focus": "重点展示竞品变化带来的销售机会：哪些用户痛点可被本品牌承接，哪些对比点需要补充证据和话术。",
-        "report_defaults": {
-            "type": "竞品追踪周报",
-            "audience": "竞品策略负责人",
-            "modules": ["关键结论", "竞品变化", "证据评论", "建议动作"],
-        },
         "copilot_commands": [
             {
                 "button": "生成竞品话术",
@@ -406,24 +387,15 @@ COMPETITORS: List[Dict] = [
 ]
 
 
-REPORTS: List[Dict] = [
-    {"name": "突发风控事件处置全周期报告", "type": "风控", "status": "草稿可生成", "owner": "品牌运营", "updated": "刚刚"},
-    {"name": "市场情报日报", "type": "日报", "status": "已生成", "owner": "品牌运营", "updated": "今日 09:30"},
-    {"name": "广告争议风险简报", "type": "风险", "status": "待审核", "owner": "公关风控", "updated": "今日 10:15"},
-    {"name": "竞品 A 新品追踪", "type": "竞品", "status": "生成中", "owner": "竞品策略", "updated": "今日 11:05"},
-    {"name": "春季上新活动复盘", "type": "活动", "status": "待补充证据", "owner": "营销增长", "updated": "昨日 18:40"},
-]
-
-
 BUSINESS_PAGES = [
     "市场情报总览",
     "Agent 研判中心",
     "风险事件中心",
     "竞品情报雷达",
-    "报告中心",
 ]
 EVIDENCE_PAGE = "新消费评论证据库"
-PAGES = BUSINESS_PAGES + [EVIDENCE_PAGE]
+COPILOT_PAGE = "情报机器人"
+PAGES = BUSINESS_PAGES + [EVIDENCE_PAGE, COPILOT_PAGE]
 
 
 ACTIVE_INCIDENT = {
@@ -739,6 +711,191 @@ def inject_styles() -> None:
     .delta-ok { background: var(--blue-soft); color: var(--blue); }
     .delta-warn { background: var(--amber-soft); color: #b45309; }
     .delta-bad { background: var(--red-soft); color: #dc2626; }
+    .detail-metric-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.65rem;
+        margin: 0.2rem 0 1rem;
+    }
+    .detail-metric-card {
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: #fff;
+        padding: 0.78rem 0.82rem;
+        min-height: 82px;
+    }
+    .detail-metric-label {
+        color: var(--muted);
+        font-size: 0.76rem;
+        line-height: 1.2;
+        margin-bottom: 0.48rem;
+    }
+    .detail-metric-value {
+        color: var(--ink);
+        font-size: 1.08rem;
+        line-height: 1.25;
+        font-weight: 760;
+        overflow-wrap: anywhere;
+    }
+    .evidence-stat-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.85rem;
+        margin: 0.35rem 0 0.8rem;
+    }
+    .evidence-stat-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.88rem 0.95rem;
+        min-height: 92px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .evidence-stat-label {
+        color: var(--muted);
+        font-size: 0.78rem;
+        line-height: 1.25;
+        margin-bottom: 0.5rem;
+    }
+    .evidence-stat-value {
+        color: var(--ink);
+        font-size: 1.08rem;
+        line-height: 1.3;
+        font-weight: 760;
+        overflow-wrap: anywhere;
+    }
+    .competitor-card {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.95rem;
+        min-height: 250px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    .competitor-visual {
+        position: relative;
+        height: 116px;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        overflow: hidden;
+        background:
+            linear-gradient(135deg, rgba(36,107,254,0.08), rgba(18,165,148,0.10)),
+            #f8fafc;
+    }
+    .competitor-visual::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+            linear-gradient(rgba(148,163,184,0.16) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(148,163,184,0.16) 1px, transparent 1px);
+        background-size: 24px 24px;
+    }
+    .product-bottle {
+        position: absolute;
+        bottom: 16px;
+        left: 22px;
+        width: 34px;
+        height: 64px;
+        border-radius: 10px 10px 8px 8px;
+        background: linear-gradient(180deg, #ffffff 0%, #dbeafe 100%);
+        border: 1px solid rgba(37,99,235,0.22);
+        box-shadow: 0 10px 22px rgba(37,99,235,0.12);
+    }
+    .product-bottle::before {
+        content: "";
+        position: absolute;
+        top: -9px;
+        left: 10px;
+        width: 14px;
+        height: 10px;
+        border-radius: 5px 5px 2px 2px;
+        background: #2563eb;
+    }
+    .product-jar {
+        position: absolute;
+        bottom: 18px;
+        left: 64px;
+        width: 58px;
+        height: 38px;
+        border-radius: 14px;
+        background: linear-gradient(180deg, #ecfeff 0%, #bae6fd 100%);
+        border: 1px solid rgba(14,165,233,0.26);
+        box-shadow: 0 10px 18px rgba(14,165,233,0.12);
+    }
+    .visual-chart {
+        position: absolute;
+        right: 18px;
+        bottom: 16px;
+        display: flex;
+        align-items: flex-end;
+        gap: 7px;
+        height: 70px;
+    }
+    .visual-chart span {
+        width: 12px;
+        border-radius: 999px 999px 3px 3px;
+        background: #2563eb;
+        opacity: 0.85;
+    }
+    .visual-chip {
+        position: absolute;
+        top: 14px;
+        right: 16px;
+        border-radius: 999px;
+        padding: 0.22rem 0.5rem;
+        background: rgba(255,255,255,0.82);
+        border: 1px solid rgba(148,163,184,0.28);
+        color: var(--muted);
+        font-size: 0.68rem;
+        font-weight: 720;
+    }
+    .competitor-card.comp-b .competitor-visual {
+        background:
+            linear-gradient(135deg, rgba(20,184,166,0.10), rgba(245,158,11,0.10)),
+            #f8fafc;
+    }
+    .competitor-card.comp-b .product-bottle::before,
+    .competitor-card.comp-b .visual-chart span {
+        background: #12a594;
+    }
+    .competitor-card.comp-b .product-jar {
+        background: linear-gradient(180deg, #f0fdfa 0%, #99f6e4 100%);
+    }
+    .competitor-card.comp-c .competitor-visual {
+        background:
+            linear-gradient(135deg, rgba(139,92,246,0.10), rgba(244,114,182,0.08)),
+            #f8fafc;
+    }
+    .competitor-card.comp-c .product-bottle::before,
+    .competitor-card.comp-c .visual-chart span {
+        background: #8b5cf6;
+    }
+    .competitor-card.comp-c .product-jar {
+        background: linear-gradient(180deg, #f5f3ff 0%, #ddd6fe 100%);
+    }
+    .competitor-name {
+        color: var(--muted);
+        font-size: 0.78rem;
+        font-weight: 720;
+        margin-bottom: 0.2rem;
+    }
+    .competitor-share {
+        color: var(--ink);
+        font-size: 1.28rem;
+        line-height: 1.15;
+        font-weight: 800;
+        margin-bottom: 0.55rem;
+    }
+    .competitor-signal {
+        color: var(--muted);
+        font-size: 0.8rem;
+        line-height: 1.55;
+        margin-top: 0.65rem;
+    }
     .signal-card {
         border: 1px solid var(--line);
         border-radius: 9px;
@@ -864,6 +1021,248 @@ def inject_styles() -> None:
         color: var(--muted);
         font-size: 0.75rem;
         line-height: 1.4;
+    }
+    div.element-container:has(.floating-copilot-button-marker) {
+        display: none !important;
+    }
+    div.element-container:has(.floating-copilot-button-marker) + div.element-container {
+        position: fixed !important;
+        right: 1.15rem !important;
+        bottom: 1.15rem !important;
+        width: 92px !important;
+        height: 92px !important;
+        z-index: 10000 !important;
+        margin: 0 !important;
+    }
+    div.element-container:has(.floating-copilot-button-marker) + div.element-container button {
+        width: 88px !important;
+        height: 88px !important;
+        border-radius: 999px !important;
+        border: 1px solid #1d4ed8 !important;
+        background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%) !important;
+        color: #fff !important;
+        box-shadow: 0 16px 36px rgba(37, 99, 235, 0.32) !important;
+        padding: 0 !important;
+    }
+    div.element-container:has(.floating-copilot-button-marker) + div.element-container button p {
+        color: #fff !important;
+        font-size: 0.78rem !important;
+        line-height: 1.18 !important;
+        font-weight: 800 !important;
+        white-space: normal !important;
+        word-break: keep-all !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div.element-container .floating-copilot-panel-marker) {
+        position: fixed !important;
+        right: 1rem !important;
+        bottom: 0.75rem !important;
+        width: min(1040px, calc(100vw - 17rem)) !important;
+        max-height: calc(100vh - 1.5rem) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        z-index: 9999 !important;
+        background: #fff !important;
+        border: 1px solid var(--line-strong) !important;
+        border-radius: 14px !important;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18) !important;
+        padding: 1.1rem !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div.element-container .floating-copilot-panel-marker) > div.element-container:has(.floating-copilot-panel-marker) {
+        display: none !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div.element-container .floating-copilot-panel-marker) {
+        gap: 0.42rem !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div.element-container .floating-copilot-panel-marker) div.element-container,
+    div[data-testid="stVerticalBlock"]:has(> div.element-container .floating-copilot-panel-marker) div.stButton {
+        max-width: 100% !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div.element-container .floating-copilot-panel-marker) button {
+        min-height: 38px !important;
+        border-radius: 8px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div.element-container .floating-copilot-panel-marker) button p {
+        font-size: 0.84rem !important;
+        line-height: 1.25 !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+    }
+    .floating-copilot-title {
+        color: var(--ink);
+        font-weight: 800;
+        font-size: 1.08rem;
+        margin-bottom: 0.12rem;
+    }
+    .floating-copilot-context {
+        color: var(--muted);
+        font-size: 0.74rem;
+        line-height: 1.38;
+    }
+    .floating-copilot-hello {
+        border: 1px solid var(--line);
+        background: #f8fafc;
+        border-radius: 10px;
+        padding: 0.68rem 0.78rem;
+        color: var(--ink);
+        font-size: 0.84rem;
+        line-height: 1.35;
+    }
+    .floating-copilot-section {
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 750;
+        margin-top: 0.15rem;
+    }
+    .copilot-chat-log {
+        box-sizing: border-box;
+        border: 1px solid var(--line);
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 0.9rem;
+        min-height: 270px;
+        height: min(480px, 54vh);
+        max-height: min(480px, 54vh);
+        overflow-y: auto;
+        overflow-x: hidden;
+        display: flex;
+        flex-direction: column;
+        gap: 0.72rem;
+        overscroll-behavior: contain;
+    }
+    .chat-row {
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        max-width: 76%;
+    }
+    .chat-row.user {
+        align-self: flex-end;
+        align-items: flex-end;
+    }
+    .chat-row.assistant {
+        align-self: flex-start;
+        align-items: flex-start;
+        width: 100%;
+        max-width: 100%;
+    }
+    .chat-speaker {
+        color: var(--muted);
+        font-size: 0.68rem;
+        font-weight: 720;
+        margin: 0 0 0.22rem;
+    }
+    .chat-bubble {
+        box-sizing: border-box;
+        max-width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 0.68rem 0.78rem;
+        color: var(--ink);
+        font-size: 0.84rem;
+        line-height: 1.58;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        white-space: normal;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+    .chat-row.assistant .chat-bubble {
+        background: #fff;
+        border-top-left-radius: 4px;
+        width: 100%;
+        max-height: min(300px, 34vh);
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .chat-row.user .chat-bubble {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #fff;
+        border-top-right-radius: 4px;
+    }
+    .copilot-input-label {
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 750;
+        margin-top: 0.15rem;
+    }
+    .copilot-shortcuts-footer {
+        border-top: 1px solid var(--line);
+        padding-top: 0.7rem;
+        margin-top: 0.2rem;
+    }
+    .copilot-page-meta {
+        display: flex;
+        gap: 0.55rem;
+        flex-wrap: wrap;
+        margin: 0.25rem 0 0.85rem;
+    }
+    .copilot-page-chat {
+        min-height: 340px;
+        height: min(520px, 54vh);
+        max-height: min(520px, 54vh);
+    }
+    .copilot-page-actions {
+        border-top: 1px solid var(--line);
+        margin-top: 0.85rem;
+        padding-top: 0.85rem;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div.element-container .floating-copilot-panel-marker) .answer-box {
+        margin-top: 0.25rem;
+        padding: 0.85rem;
+        font-size: 0.86rem;
+        line-height: 1.6;
+        max-height: min(420px, 54vh);
+        overflow-y: auto !important;
+        overscroll-behavior: contain;
+    }
+    div[data-testid="stVerticalBlock"]:has(> div.element-container .floating-copilot-panel-marker) input {
+        min-height: 38px !important;
+        height: 38px !important;
+    }
+    .action-tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.45rem;
+    }
+    .action-tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        border: 1px solid var(--line);
+        background: #f8fafc;
+        color: var(--muted);
+        border-radius: 8px;
+        padding: 0.42rem 0.68rem;
+        font-size: 0.82rem;
+        font-weight: 720;
+    }
+    .risk-option-meta {
+        border: 1px solid var(--line);
+        border-top: 0;
+        border-radius: 0 0 10px 10px;
+        margin: -0.35rem 0 0.65rem 0;
+        padding: 0.55rem 0.75rem 0.65rem;
+        background: #fff;
+        color: var(--muted);
+        font-size: 0.78rem;
+        line-height: 1.55;
+    }
+    div.element-container:has(.risk-selected-marker) {
+        display: none !important;
+    }
+    div.element-container:has(.risk-selected-marker) + div.element-container button {
+        border-color: #2563eb !important;
+        background: #2563eb !important;
+        color: #fff !important;
+        box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18) !important;
+    }
+    div.element-container:has(.risk-selected-marker) + div.element-container button p {
+        color: #fff !important;
+        font-weight: 800 !important;
     }
     .answer-box {
         border: 1px solid #c7d7fe;
@@ -1181,12 +1580,39 @@ def query_sample_rag(question: str, top_k: int = 5) -> Optional[Dict]:
         response = requests.post(
             f"{API_BASE_URL}/api/query",
             json={"question": question, "top_k": top_k},
-            timeout=30,
+            timeout=90,
         )
         if response.status_code == 200:
             return response.json()
     except Exception:
         return None
+    return None
+
+
+def query_market_agent(
+    context: str,
+    work_view: str,
+    instruction: str,
+    event: Optional[Dict] = None,
+    top_k: int = 8,
+) -> Optional[str]:
+    event = event or ACTIVE_INCIDENT
+    question = f"""你是 InsightOps 企业市场情报 Agent。
+
+当前页面：{context}
+当前工作视角：{work_view}
+当前事件：{event.get("title", ACTIVE_INCIDENT["title"])}
+事件摘要：{event.get("summary", ACTIVE_INCIDENT["summary"])}
+业务指令：{instruction}
+
+请基于新消费评论证据库输出可直接用于企业内部工作的结果。要求：
+1. 先给结论，再给证据，再给行动建议；
+2. 不编造不存在的数据；
+3. 用简洁的中文业务表达；
+4. 如果是口径、日报、复盘或话术，请直接写成可交付草稿。"""
+    result = query_sample_rag(question, top_k=top_k)
+    if result and result.get("answer"):
+        return result["answer"]
     return None
 
 
@@ -1241,8 +1667,14 @@ def ensure_app_state() -> None:
         st.session_state.pr_response_approved = False
     if "marketing_review_generated" not in st.session_state:
         st.session_state.marketing_review_generated = False
-    if "incident_report_ready" not in st.session_state:
-        st.session_state.incident_report_ready = False
+    if "copilot_open" not in st.session_state:
+        st.session_state.copilot_open = False
+    if "copilot_input_nonce" not in st.session_state:
+        st.session_state.copilot_input_nonce = 0
+    if "copilot_source_page" not in st.session_state:
+        st.session_state.copilot_source_page = st.session_state.get("flow_page", "市场情报总览")
+    if "copilot_source_event_id" not in st.session_state:
+        st.session_state.copilot_source_event_id = ACTIVE_INCIDENT["id"]
 
 
 def sync_flow_page() -> None:
@@ -1251,6 +1683,16 @@ def sync_flow_page() -> None:
 
 def open_evidence_page() -> None:
     st.session_state.nav_page = EVIDENCE_PAGE
+
+
+def open_copilot_page(source_page: Optional[str] = None, event: Optional[Dict] = None) -> None:
+    source = source_page or st.session_state.get("nav_page") or st.session_state.get("flow_page") or "市场情报总览"
+    if source == COPILOT_PAGE:
+        source = st.session_state.get("copilot_source_page") or st.session_state.get("flow_page") or "市场情报总览"
+    st.session_state.copilot_source_page = source
+    st.session_state.copilot_source_event_id = (event or get_copilot_event(source)).get("id", ACTIVE_INCIDENT["id"])
+    st.session_state.copilot_open = False
+    st.session_state.nav_page = COPILOT_PAGE
 
 
 def dispatch_incident_to_pr() -> None:
@@ -1262,7 +1704,6 @@ def dispatch_incident_to_pr() -> None:
     st.session_state.pr_response_approved = False
     st.session_state.trigger_marketing_alert = False
     st.session_state.marketing_review_generated = False
-    st.session_state.incident_report_ready = False
 
 
 def approve_pr_response() -> None:
@@ -1280,9 +1721,8 @@ def approve_pr_response() -> None:
 
 def generate_marketing_review() -> None:
     st.session_state.marketing_review_generated = True
-    st.session_state.incident_report_ready = True
-    st.session_state.nav_page = "报告中心"
-    st.session_state.flow_page = "报告中心"
+    st.session_state.nav_page = "Agent 研判中心"
+    st.session_state.flow_page = "Agent 研判中心"
 
 
 def ensure_work_view() -> str:
@@ -1306,6 +1746,11 @@ def current_work_view() -> Dict:
 
 def list_items(items: List[str]) -> str:
     return "".join(f'<div class="signal-card"><div class="signal-title">{item}</div></div>' for item in items)
+
+
+def action_tags(items: List[str]) -> str:
+    tags = "".join(f'<span class="action-tag">{item}</span>' for item in items)
+    return f'<div class="action-tag-row">{tags}</div>'
 
 
 def render_header(title: str, subtitle: str, context: str = "新消费品牌演示空间") -> None:
@@ -1679,47 +2124,13 @@ def render_marketing_alert_panel() -> None:
             st.checkbox(action, value=True, key=f"marketing_action_{idx}")
 
     st.button(
-        "生成活动复盘骨架并进入报告中心",
+        "生成活动复盘骨架",
         key="generate_marketing_review",
         type="primary",
         on_click=generate_marketing_review,
     )
-
-
-def render_incident_report_preview() -> None:
-    incident = ACTIVE_INCIDENT
-    st.markdown('<div class="panel">', unsafe_allow_html=True)
-    panel_title("突发风控事件处置全周期报告", "管理层可读")
-    st.markdown(f"#### {incident['title']}")
-    st.markdown(f'<div class="small-note">{incident["summary"]}</div>', unsafe_allow_html=True)
-    timeline = [
-        ("监测拦截", "Risk-LLM 捕捉小红书爆款负面，判定为高危产品体验事件。"),
-        ("Agent 研判", "提取过敏、刺痛、辣脸、客服模板化等证据，评估大促影响。"),
-        ("公关处置", "生成一级回应口径，由公关风控审核后下发客服和社媒团队。"),
-        ("营销调整", "暂停高风险素材，调整达人 brief 和信息流卖点表达。"),
-        ("资产沉淀", "形成风控事件报告、复盘骨架和后续观察指标。"),
-    ]
-    html = ['<div class="timeline">']
-    for title, desc in timeline:
-        html.append(f'<div class="timeline-step"><strong>{title}</strong><span>{desc}</span></div>')
-    html.append("</div>")
-    st.markdown("".join(html), unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-
-def render_workflow() -> None:
-    steps = [
-        ("配置监测", "品牌词、竞品词、活动词、风险词"),
-        ("信号发现", "识别异常声量、负面扩散与新兴议题"),
-        ("Agent 研判", "归因、证据链、置信度和影响面"),
-        ("业务处置", "分派负责人、生成口径和行动建议"),
-        ("报告沉淀", "日报、周报、复盘与策略资产"),
-    ]
-    html = ['<div class="workflow">']
-    for title, desc in steps:
-        html.append(f'<div class="workflow-step"><strong>{title}</strong><span>{desc}</span></div>')
-    html.append("</div>")
-    st.markdown("".join(html), unsafe_allow_html=True)
+    if st.session_state.get("marketing_review_generated"):
+        st.success("活动复盘骨架已生成，后续可由情报机器人继续补充为复盘草稿。")
 
 
 def render_market_dashboard() -> None:
@@ -1728,90 +2139,6 @@ def render_market_dashboard() -> None:
     render_header("市场情报总览", f"当前工作视角：{work_view}。{view['subtitle']}")
 
     render_market_focus_cards(work_view, view)
-
-    st.markdown(
-        """
-<div class="section-heading">下沉信息 · 运营监测明细</div>
-<div class="section-note">以下内容用于展开复盘、辅助研判和交叉验证，不再抢占首页第一屏。</div>
-""",
-        unsafe_allow_html=True,
-    )
-    metric_cols = st.columns(5)
-    metrics = view["metrics"] + [("情报覆盖平台", "42", "新增 3", "ok")]
-    for col, metric in zip(metric_cols, metrics):
-        with col:
-            metric_card(*metric)
-
-    st.write("")
-    main_col, copilot_col = st.columns([2.55, 1], gap="medium")
-
-    with main_col:
-        row1_left, row1_mid, row1_right = st.columns([1.18, 1.08, 0.98], gap="medium")
-        with row1_left:
-            st.markdown('<div class="panel">', unsafe_allow_html=True)
-            panel_title("监测项目", "全部项目")
-            render_monitor_table()
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with row1_mid:
-            st.markdown('<div class="panel">', unsafe_allow_html=True)
-            panel_title("风险信号", "全部 7")
-            for event in RISK_EVENTS:
-                render_signal_card(event)
-            st.markdown('<div class="mini-link">查看全部风险 →</div>', unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with row1_right:
-            st.markdown('<div class="panel">', unsafe_allow_html=True)
-            panel_title("竞品雷达", "能力对比")
-            render_competitor_mini_radar()
-            st.markdown('<div class="mini-link">查看竞品对比 →</div>', unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        row2_left, row2_right = st.columns([1.35, 1], gap="medium")
-        with row2_left:
-            st.markdown('<div class="panel">', unsafe_allow_html=True)
-            panel_title("情报趋势", "声量趋势")
-            render_trend_chart()
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        with row2_right:
-            st.markdown('<div class="panel">', unsafe_allow_html=True)
-            panel_title("证据速览", "最新证据")
-            evidence_rows = [
-                ("抖音", "用户讨论新品包装设计", "正面", "2 分钟前", "tag-run"),
-                ("小红书", "KOL 测评中提到竞品降价", "中性", "15 分钟前", "tag-mid"),
-                ("微博", "用户反馈产品口感问题", "负面", "32 分钟前", "tag-high"),
-            ]
-            for platform, text, tone, time, tag_class in evidence_rows:
-                st.markdown(
-                    f"""
-<div class="signal-card">
-    <div class="signal-top">
-        <div class="signal-title">{platform} · {text}</div>
-        <span class="tag {tag_class}">{tone}</span>
-    </div>
-    <div class="signal-meta">{time}</div>
-</div>
-""",
-                    unsafe_allow_html=True,
-                )
-            st.markdown('<div class="mini-link">查看全部证据 →</div>', unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        st.write("")
-        st.markdown('<div class="panel">', unsafe_allow_html=True)
-        panel_title("监测到处置闭环", "企业业务流程")
-        render_workflow()
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with copilot_col:
-        st.markdown('<div class="panel">', unsafe_allow_html=True)
-        panel_title("今日待处理事项", work_view)
-        st.markdown(list_items(view["focus"]), unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.write("")
-        render_copilot("首页总览", RISK_EVENTS[0], compact=True)
 
 
 def render_agent_center() -> None:
@@ -1836,6 +2163,26 @@ def render_agent_center() -> None:
     for col, metric in zip(stage_cols, stage_metrics):
         with col:
             metric_card(*metric)
+
+    st.write("")
+    detail_cols = st.columns([1.15, 1, 1.25], gap="medium")
+    with detail_cols[0]:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("监测项目", "运营监测明细")
+        render_monitor_table()
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with detail_cols[1]:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("今日待处理事项", work_view)
+        st.markdown(list_items(view["focus"]), unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with detail_cols[2]:
+        st.markdown('<div class="panel">', unsafe_allow_html=True)
+        panel_title("情报趋势", "声量趋势")
+        render_trend_chart()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.write("")
     left, right = st.columns([1.15, 1.85])
@@ -1884,14 +2231,8 @@ def render_agent_center() -> None:
                 st.markdown(f'<div class="evidence">{evidence}</div>', unsafe_allow_html=True)
 
         st.markdown("**建议动作**")
-        action_cols = st.columns(4)
-        for col, action in zip(action_cols, view["risk_actions"]):
-            with col:
-                st.button(action, key=f"agent_{work_view}_{action}", use_container_width=True)
+        st.markdown(action_tags(view["risk_actions"]), unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
-
-    st.write("")
-    render_copilot(f"高风险事件 {RISK_EVENTS[0]['id']}", RISK_EVENTS[0])
 
 
 def render_risk_center() -> None:
@@ -1907,30 +2248,63 @@ def render_risk_center() -> None:
     with list_col:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
         panel_title("风险列表", "按紧急度排序")
-        labels = [f'{event["id"]} · {event["title"]}' for event in RISK_EVENTS]
-        active_id = st.session_state.get("active_incident_id")
-        default_index = next((idx for idx, event in enumerate(RISK_EVENTS) if event["id"] == active_id), 0)
-        selected_label = st.radio(
-            "选择风险事件",
-            labels,
-            index=default_index,
-            key=f"risk_event_selector_{active_id or 'default'}",
-            label_visibility="collapsed",
-        )
-        selected_index = labels.index(selected_label)
-        for event in RISK_EVENTS:
-            render_signal_card(event)
+        active_id = st.session_state.get("selected_risk_event_id") or st.session_state.get("active_incident_id")
+        risk_ids = [event["id"] for event in RISK_EVENTS]
+        if active_id not in risk_ids:
+            active_id = RISK_EVENTS[0]["id"]
+
+        for risk_event in RISK_EVENTS:
+            is_active = risk_event["id"] == active_id
+            if is_active:
+                st.markdown('<span class="risk-selected-marker"></span>', unsafe_allow_html=True)
+            if st.button(
+                f'{risk_event["id"]} · {risk_event["title"]}',
+                key=f'risk_select_{risk_event["id"]}',
+                type="primary" if is_active else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state.selected_risk_event_id = risk_event["id"]
+                st.rerun()
+            st.markdown(
+                f"""
+<div class="risk-option-meta">
+    {risk_event["trend"]} · {risk_event["platform"]}<br>
+    负责人：{risk_event["owner"]} · 状态：{risk_event["status"]} · AI 置信度：{risk_event["confidence"]}%
+</div>
+""",
+                unsafe_allow_html=True,
+            )
         st.markdown("</div>", unsafe_allow_html=True)
 
-    event = RISK_EVENTS[selected_index]
+    selected_id = st.session_state.get("selected_risk_event_id") or active_id
+    event = next((item for item in RISK_EVENTS if item["id"] == selected_id), RISK_EVENTS[0])
+    st.session_state.selected_risk_event_id = event["id"]
     with detail_col:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
         panel_title("事件详情", event["id"])
-        top = st.columns(4)
-        top[0].metric("风险等级", event["level"])
-        top[1].metric("AI 置信度", f'{event["confidence"]}%')
-        top[2].metric("负责人", event["owner"])
-        top[3].metric("状态", event["status"])
+        st.markdown(
+            f"""
+<div class="detail-metric-grid">
+    <div class="detail-metric-card">
+        <div class="detail-metric-label">风险等级</div>
+        <div class="detail-metric-value">{event["level"]}</div>
+    </div>
+    <div class="detail-metric-card">
+        <div class="detail-metric-label">AI 置信度</div>
+        <div class="detail-metric-value">{event["confidence"]}%</div>
+    </div>
+    <div class="detail-metric-card">
+        <div class="detail-metric-label">负责人</div>
+        <div class="detail-metric-value">{event["owner"]}</div>
+    </div>
+    <div class="detail-metric-card">
+        <div class="detail-metric-label">状态</div>
+        <div class="detail-metric-value">{event["status"]}</div>
+    </div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
         st.markdown(f"#### {event['title']}")
         st.markdown(f'<div class="small-note">{event["summary"]}</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="answer-box"><strong>{work_view}解释重点：</strong>{view["risk_lens"]}</div>', unsafe_allow_html=True)
@@ -1957,10 +2331,7 @@ def render_risk_center() -> None:
             st.markdown(f'<div class="evidence">{evidence}</div>', unsafe_allow_html=True)
 
         st.markdown("**处置动作**")
-        cols = st.columns(4)
-        for col, action in zip(cols, view["risk_actions"]):
-            with col:
-                st.button(action, key=f"{event['id']}_{work_view}_{action}", use_container_width=True)
+        st.markdown(action_tags(view["risk_actions"]), unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     if event["id"] == ACTIVE_INCIDENT["id"]:
@@ -1968,9 +2339,6 @@ def render_risk_center() -> None:
         render_pr_response_workspace()
         if st.session_state.get("pr_response_approved"):
             st.success("回应口径已审核通过，并已下发给营销增长进入活动熔断与素材优化流程。")
-
-    st.write("")
-    render_copilot(f"风险事件 {event['id']}", event)
 
 
 def render_competitor_radar() -> None:
@@ -1980,14 +2348,39 @@ def render_competitor_radar() -> None:
 
     comp_df = pd.DataFrame(COMPETITORS)
     top_cols = st.columns(3)
-    for col, comp in zip(top_cols, COMPETITORS):
+    for index, (col, comp) in enumerate(zip(top_cols, COMPETITORS)):
+        card_class = ["comp-a", "comp-b", "comp-c"][index]
+        chart_heights = [
+            ("34%", "56%", "74%", "92%"),
+            ("42%", "63%", "48%", "68%"),
+            ("58%", "46%", "38%", "30%"),
+        ][index]
+        chip = ["新品声量", "促销热度", "包装讨论"][index]
         with col:
-            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-label">{comp["name"]}</div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="metric-value">声量 {comp["share"]}%</div>', unsafe_allow_html=True)
-            st.markdown(f'<span class="metric-delta delta-up">{comp["change"]}</span>', unsafe_allow_html=True)
-            st.markdown(f'<div class="small-note" style="margin-top:.7rem;">{comp["signal"]}</div>', unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+<div class="competitor-card {card_class}">
+    <div class="competitor-visual">
+        <div class="product-bottle"></div>
+        <div class="product-jar"></div>
+        <div class="visual-chart">
+            <span style="height:{chart_heights[0]}"></span>
+            <span style="height:{chart_heights[1]}"></span>
+            <span style="height:{chart_heights[2]}"></span>
+            <span style="height:{chart_heights[3]}"></span>
+        </div>
+        <div class="visual-chip">{chip}</div>
+    </div>
+    <div>
+        <div class="competitor-name">{comp["name"]}</div>
+        <div class="competitor-share">声量 {comp["share"]}%</div>
+        <span class="metric-delta delta-up">{comp["change"]}</span>
+        <div class="competitor-signal">{comp["signal"]}</div>
+    </div>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
 
     st.write("")
     left, right = st.columns([1.2, 1])
@@ -2026,67 +2419,6 @@ def render_competitor_radar() -> None:
             )
         st.markdown("</div>", unsafe_allow_html=True)
 
-    st.write("")
-    render_copilot("竞品雷达", RISK_EVENTS[2])
-
-
-def render_report_center() -> None:
-    work_view = ensure_work_view()
-    view = current_work_view()
-    defaults = view["report_defaults"]
-    render_header("报告中心", f"当前工作视角：{work_view}。报告生成器会自动预设报告类型、目标读者和默认模块。")
-
-    if st.session_state.get("active_incident_id") == ACTIVE_INCIDENT["id"]:
-        render_incident_report_preview()
-        st.write("")
-
-    left, right = st.columns([1.2, 1])
-    with left:
-        st.markdown('<div class="panel">', unsafe_allow_html=True)
-        panel_title("报告列表", "按更新时间")
-        report_df = pd.DataFrame(REPORTS)
-        st.dataframe(report_df, use_container_width=True, hide_index=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with right:
-        st.markdown('<div class="panel">', unsafe_allow_html=True)
-        panel_title("报告生成器", f"{work_view}预设")
-        st.markdown('<div class="small-note">管理层保留为报告受众和老板版简报，不作为日常可切换工作视角。</div>', unsafe_allow_html=True)
-        report_types = ["市场情报日报", "风险事件简报", "竞品追踪周报", "营销活动复盘", "管理层简报"]
-        audiences = ["品牌运营负责人", "公关风控负责人", "营销增长负责人", "竞品策略负责人", "管理层"]
-        module_options = ["关键结论", "风险事件", "竞品变化", "证据评论", "建议动作", "下周观察点"]
-        report_type = st.selectbox(
-            "报告类型",
-            report_types,
-            index=report_types.index(defaults["type"]),
-            key=f"report_type_{work_view}",
-        )
-        audience = st.selectbox(
-            "目标读者",
-            audiences,
-            index=audiences.index(defaults["audience"]),
-            key=f"audience_{work_view}",
-        )
-        include = st.multiselect(
-            "包含模块",
-            module_options,
-            default=[module for module in defaults["modules"] if module in module_options],
-            key=f"modules_{work_view}",
-        )
-        st.markdown(f'<div class="small-note">默认输出物：{view["agent_output"]}</div>', unsafe_allow_html=True)
-        draft_key = f"report_draft_{work_view}"
-        if st.button("生成报告草稿", use_container_width=True, type="primary"):
-            st.session_state[draft_key] = (
-                f"{report_type}草稿已生成，面向{audience}，包含{len(include)}个模块。"
-                f"当前按“{work_view}”视角组织内容，建议重点呈现广告争议风险、竞品 A 新品影响和售后体验观察点。"
-            )
-        if st.session_state.get(draft_key):
-            st.markdown(f'<div class="answer-box">{st.session_state[draft_key]}</div>', unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    st.write("")
-    render_copilot("报告中心", RISK_EVENTS[0])
-
 
 def render_sample_data_lab() -> None:
     work_view = ensure_work_view()
@@ -2095,11 +2427,23 @@ def render_sample_data_lab() -> None:
     stats = get_local_sample_stats()
     api_online = check_api_status()
 
-    cols = st.columns(4)
-    cols[0].metric("后端 API", "在线" if api_online else "离线")
-    cols[1].metric("证据评论", stats.get("count", 0) if stats.get("available") else "未加载")
-    cols[2].metric("数据定位", "护肤/美妆评论")
-    cols[3].metric("向量库", "TF-IDF 本地检索")
+    evidence_stats = [
+        ("后端 API", "在线" if api_online else "离线"),
+        ("证据评论", stats.get("count", 0) if stats.get("available") else "未加载"),
+        ("数据定位", "护肤/美妆评论"),
+        ("向量库", "TF-IDF 本地检索"),
+    ]
+    st.markdown(
+        f"""
+<div class="evidence-stat-grid">
+    {''.join(
+        f'<div class="evidence-stat-card"><div class="evidence-stat-label">{label}</div><div class="evidence-stat-value">{value}</div></div>'
+        for label, value in evidence_stats
+    )}
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
     st.markdown(
         """
@@ -2139,7 +2483,7 @@ def render_sample_data_lab() -> None:
     evidence = load_evidence_comments(limit=6)
     if evidence:
         st.markdown('<div class="panel">', unsafe_allow_html=True)
-        panel_title("高互动评论证据", "来自本地新消费证据库")
+        panel_title("证据速览", "高互动评论证据")
         for row in evidence:
             sentiment = row.get("sentiment", "neutral")
             tag_class = {"positive": "tag-run", "negative": "tag-high", "neutral": "tag-mid"}.get(sentiment, "tag-low")
@@ -2163,63 +2507,183 @@ def render_sample_data_lab() -> None:
     st.write("")
     st.markdown('<div class="panel">', unsafe_allow_html=True)
     panel_title("新消费 RAG 查询", "仅在后端服务启动时可用")
-    question = st.text_input("查询新消费评论证据库", value="精华液过敏辣脸相关负面情绪主要集中在哪些方面？")
+    result_key = "sample_rag_query_result"
+    error_key = "sample_rag_query_error"
+    default_question = st.session_state.get(
+        "sample_rag_last_question",
+        "精华液过敏辣脸相关负面情绪主要集中在哪些方面？",
+    )
+    question = st.text_input("查询新消费评论证据库", value=default_question)
     if st.button("查询证据库", type="primary"):
-        result = query_sample_rag(question)
+        st.session_state.sample_rag_last_question = question
+        st.session_state.pop(result_key, None)
+        st.session_state.pop(error_key, None)
+        with st.spinner("正在调用 DeepSeek，并检索本地评论证据库..."):
+            result = query_sample_rag(question)
         if result:
-            st.markdown(f'<div class="answer-box">{result.get("answer", "")}</div>', unsafe_allow_html=True)
-            st.caption(f"检索到 {result.get('retrieval_count', 0)} 条新消费评论。")
+            st.session_state[result_key] = result
         else:
-            st.warning("后端未启动或查询失败。可先运行 start.bat 启动 API 服务。")
+            st.session_state[error_key] = "后端未启动或查询失败。可先运行 start.bat 启动 API 服务。"
+
+    if st.session_state.get(result_key):
+        result = st.session_state[result_key]
+        last_question = st.session_state.get("sample_rag_last_question", question)
+        st.caption(f"上次查询：{last_question}")
+        st.markdown(f'<div class="answer-box">{result.get("answer", "")}</div>', unsafe_allow_html=True)
+        st.caption(f"检索到 {result.get('retrieval_count', 0)} 条新消费评论。")
+    elif st.session_state.get(error_key):
+        st.warning(st.session_state[error_key])
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def render_copilot(context: str, event: Dict, compact: bool = False) -> None:
+def get_event_by_id(event_id: Optional[str]) -> Optional[Dict]:
+    if not event_id:
+        return None
+    for event in RISK_EVENTS:
+        if event["id"] == event_id:
+            return event
+    if event_id == ACTIVE_INCIDENT["id"]:
+        return ACTIVE_INCIDENT
+    return None
+
+
+def get_copilot_event(page: str) -> Dict:
+    if page == "风险事件中心":
+        return get_event_by_id(st.session_state.get("selected_risk_event_id")) or ACTIVE_INCIDENT
+    if page == "竞品情报雷达":
+        return RISK_EVENTS[2] if len(RISK_EVENTS) > 2 else ACTIVE_INCIDENT
+    if page == "Agent 研判中心":
+        return RISK_EVENTS[0] if RISK_EVENTS else ACTIVE_INCIDENT
+    return ACTIVE_INCIDENT
+
+
+def format_chat_content(content: str) -> str:
+    return html.escape(content or "").replace("\n", "<br>")
+
+
+def render_chat_history(messages: List[Dict[str, str]], class_name: str = "copilot-chat-log") -> None:
+    rows = []
+    for message in messages:
+        role = message.get("role", "assistant")
+        speaker = "你" if role == "user" else "情报机器人"
+        rows.append(
+            f"""
+<div class="chat-row {role}">
+    <div class="chat-speaker">{speaker}</div>
+    <div class="chat-bubble">{format_chat_content(message.get("content", ""))}</div>
+</div>
+"""
+        )
+    st.markdown(f'<div class="{class_name}">{"".join(rows)}</div>', unsafe_allow_html=True)
+
+
+def ensure_copilot_chat(chat_key: str, view: Dict) -> List[Dict[str, str]]:
+    if chat_key not in st.session_state:
+        st.session_state[chat_key] = [
+            {
+                "role": "assistant",
+                "content": f"你好，NewBrand 团队。我可以帮你生成{view['agent_output']}。你可以直接输入问题，也可以使用底部快捷指令。",
+            }
+        ]
+    return st.session_state[chat_key]
+
+
+def append_copilot_exchange(chat_key: str, user_text: str, answer: Optional[str]) -> None:
+    messages = st.session_state.setdefault(chat_key, [])
+    messages.append({"role": "user", "content": user_text})
+    messages.append(
+        {
+            "role": "assistant",
+            "content": answer or "后端 API 未连接，或 DeepSeek API Key 未配置。请先启动 FastAPI 后端并设置 DEEPSEEK_API_KEY。",
+        }
+    )
+
+
+def render_copilot_page() -> None:
     work_view = ensure_work_view()
     view = current_work_view()
-    answer_key = f"copilot_answer_{context}_{work_view}"
-    st.markdown('<div class="copilot-box">', unsafe_allow_html=True)
-    st.markdown("<strong>✦ Copilot</strong>", unsafe_allow_html=True)
-    st.markdown(
-        f"<p>您好，NewBrand 团队。当前上下文：{context}。当前工作视角：{work_view}。我会优先生成该视角最需要的动作、报告或话术资产。</p>",
-        unsafe_allow_html=True,
-    )
-    st.markdown("</div>", unsafe_allow_html=True)
+    context = st.session_state.get("copilot_source_page") or st.session_state.get("flow_page") or "市场情报总览"
+    if context == COPILOT_PAGE:
+        context = st.session_state.get("flow_page") or "市场情报总览"
+    event = get_event_by_id(st.session_state.get("copilot_source_event_id")) or get_copilot_event(context)
+    chat_key = f"copilot_chat_{context}_{work_view}"
+    messages = ensure_copilot_chat(chat_key, view)
 
-    for command in view["copilot_commands"]:
-        st.markdown(
-            f"""
-<div class="copilot-card">
-    <span class="copilot-icon">{command["icon"]}</span>
-    <div><strong>{command["title"]}</strong><span>{command["desc"]}</span></div>
+    render_header("情报机器人", "以多轮对话方式生成市场情报、风险研判、任务分派和报告草稿。")
+    st.markdown(
+        f"""
+<div class="copilot-page-meta">
+    <span class="tag tag-low">来源页面：{context}</span>
+    <span class="tag tag-run">工作视角：{work_view}</span>
+    <span class="tag tag-mid">当前事件：{event.get("id", ACTIVE_INCIDENT["id"])}</span>
 </div>
 """,
-            unsafe_allow_html=True,
-        )
-        if st.button(command["button"], key=f"{context}_{work_view}_{command['button']}", use_container_width=True):
-            st.session_state[answer_key] = command["answer"]
-
-    tags = st.columns(4)
-    for tag_col, tag in zip(tags, ["全网", "社媒", "新闻", "行业报告"]):
-        with tag_col:
-            st.button(tag, key=f"{context}_{work_view}_tag_{tag}", use_container_width=True)
-
-    custom = st.text_input(
-        "输入业务指令",
-        placeholder="输入你的问题或指令，Shift + Enter 换行",
-        key=f"copilot_input_{context}_{work_view}",
+        unsafe_allow_html=True,
     )
-    if st.button("发送给 Copilot", key=f"send_{context}_{work_view}", type="primary"):
-        if custom.strip():
-            st.session_state[answer_key] = (
-                f"已基于“{event['title']}”和“{work_view}”视角生成建议：{view['risk_lens']}"
-                f"下一步建议围绕“{custom.strip()}”输出可交付材料，并沉淀为{view['agent_output']}。"
-            )
-        else:
-            st.session_state[answer_key] = "请输入一个具体业务指令，例如生成回应口径、整理证据摘要、生成竞品话术或加入今日简报。"
 
-    if st.session_state.get(answer_key):
-        st.markdown(f'<div class="answer-box">{st.session_state[answer_key]}</div>', unsafe_allow_html=True)
+    top_actions = st.columns([1, 1, 4])
+    with top_actions[0]:
+        if st.button("返回来源页面", use_container_width=True):
+            st.session_state.nav_page = context if context in PAGES else st.session_state.get("flow_page", "市场情报总览")
+            st.rerun()
+    with top_actions[1]:
+        if st.button("清空对话", use_container_width=True):
+            st.session_state.pop(chat_key, None)
+            st.session_state.copilot_input_nonce += 1
+            st.rerun()
+
+    render_chat_history(messages, "copilot-chat-log copilot-page-chat")
+
+    form_key = f"copilot_page_form_{context}_{work_view}_{st.session_state.copilot_input_nonce}"
+    with st.form(form_key, clear_on_submit=True):
+        input_cols = st.columns([5, 1])
+        with input_cols[0]:
+            custom = st.text_input(
+                "业务指令",
+                placeholder="输入你的问题或指令",
+                label_visibility="collapsed",
+            )
+        with input_cols[1]:
+            send_clicked = st.form_submit_button("发送", type="primary", use_container_width=True)
+
+    if send_clicked:
+        if custom.strip():
+            with st.spinner("正在调用 DeepSeek..."):
+                answer = query_market_agent(context, work_view, custom.strip(), event)
+            append_copilot_exchange(chat_key, custom.strip(), answer)
+            st.session_state.copilot_input_nonce += 1
+            st.rerun()
+        else:
+            st.warning("请输入一个具体业务指令。")
+
+    st.markdown('<div class="copilot-page-actions">', unsafe_allow_html=True)
+    st.markdown('<div class="floating-copilot-section">快捷指令</div>', unsafe_allow_html=True)
+    command_cols = st.columns(4, gap="small")
+    for idx, command in enumerate(view["copilot_commands"]):
+        with command_cols[idx % len(command_cols)]:
+            if st.button(
+                command["title"],
+                key=f"copilot_page_{context}_{work_view}_{command['button']}",
+                help=command["desc"],
+                use_container_width=True,
+            ):
+                instruction = f"执行快捷指令：{command['title']}。目标：{command['desc']}。"
+                with st.spinner("正在调用 DeepSeek..."):
+                    answer = query_market_agent(context, work_view, instruction, event)
+                append_copilot_exchange(chat_key, command["title"], answer)
+                st.session_state.copilot_input_nonce += 1
+                st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def render_global_copilot(page: str, event: Dict) -> None:
+    if page == COPILOT_PAGE:
+        return
+
+    st.markdown('<span class="floating-copilot-button-marker"></span>', unsafe_allow_html=True)
+    if st.button("情报机器人", key=f"open_copilot_page_{page}", help="打开情报机器人"):
+        open_copilot_page(page, event)
+        st.rerun()
 
 
 def render_sidebar() -> str:
@@ -2238,17 +2702,9 @@ def render_sidebar() -> str:
         on_change=sync_flow_page,
     )
     st.sidebar.markdown("---")
-    st.sidebar.caption("数据来源 / 证据库")
-    st.sidebar.markdown(
-        """
-- 新消费品牌 Mock 数据
-- 500 条新消费评论证据
-- 本地 TF-IDF 向量库
-- 2 分钟前同步
-"""
-    )
+    st.sidebar.caption("证据库")
     if st.sidebar.button(
-        "打开新消费评论证据库",
+        "新消费评论证据库",
         key="open_evidence_library",
         type="primary" if st.session_state.nav_page == EVIDENCE_PAGE else "secondary",
         use_container_width=True,
@@ -2262,7 +2718,7 @@ def render_sidebar() -> str:
     st.sidebar.markdown("---")
     api_online = check_api_status()
     if api_online:
-        st.sidebar.success("API 在线")
+        st.sidebar.success("API 在线 · 500 条证据")
     else:
         st.sidebar.warning("API 未启动")
     return st.session_state.nav_page
@@ -2282,10 +2738,11 @@ def main() -> None:
         render_risk_center()
     elif page == "竞品情报雷达":
         render_competitor_radar()
-    elif page == "报告中心":
-        render_report_center()
+    elif page == COPILOT_PAGE:
+        render_copilot_page()
     else:
         render_sample_data_lab()
+    render_global_copilot(page, get_copilot_event(page))
 
 
 if __name__ == "__main__":
