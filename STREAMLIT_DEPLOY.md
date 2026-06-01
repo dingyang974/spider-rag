@@ -14,14 +14,19 @@ Deploy the Streamlit prototype from GitHub:
 Set this in Streamlit Community Cloud app settings:
 
 ```toml
+DEEPSEEK_API_KEY = "your_deepseek_api_key_here"
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_MODEL = "deepseek-chat"
+
+# Optional: use this only if a separate FastAPI backend is deployed.
 API_BASE_URL = "https://your-fastapi-service.example.com"
 ```
 
-If `API_BASE_URL` is not set, the app falls back to `http://localhost:8000`, which only works for local development.
+If `API_BASE_URL` is not set, the Streamlit app falls back to direct in-process RAG: it loads the committed local TF-IDF/FAISS vector store and calls the DeepSeek API from Streamlit.
 
 ## Backend API
 
-Streamlit Community Cloud runs the Streamlit app, not the separate FastAPI service. For the sample RAG query to work online, deploy `api.main:app` to a backend host such as Render, Railway, Fly.io, or another server, then paste that public HTTPS URL into `API_BASE_URL`.
+Streamlit Community Cloud runs the Streamlit app, not the separate FastAPI service. The sample RAG query works online through the direct DeepSeek fallback when `DEEPSEEK_API_KEY` is configured. If you also deploy `api.main:app` to a backend host such as Render, Railway, Fly.io, or another server, paste that public HTTPS URL into `API_BASE_URL`.
 
 Suggested backend start command:
 

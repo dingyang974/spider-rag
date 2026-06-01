@@ -23,21 +23,33 @@ def get_runtime_setting(key: str, default: str) -> str:
     if env_value:
         return env_value
 
-    secrets_paths = [
-        os.path.join(os.path.expanduser("~"), ".streamlit", "secrets.toml"),
-        os.path.join(os.getcwd(), ".streamlit", "secrets.toml"),
-    ]
-    if not any(os.path.exists(path) for path in secrets_paths):
-        return default
-
     try:
         value = st.secrets.get(key)
     except Exception:
         value = None
-    return value or default
+    if value:
+        return value
+
+    env_path = os.path.join(os.getcwd(), ".env")
+    if os.path.exists(env_path):
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    name, raw_value = line.split("=", 1)
+                    if name.strip() == key:
+                        return raw_value.strip().strip('"').strip("'") or default
+        except Exception:
+            pass
+    return default
 
 
 API_BASE_URL = get_runtime_setting("API_BASE_URL", DEFAULT_API_BASE_URL).rstrip("/")
+DEEPSEEK_API_KEY = get_runtime_setting("DEEPSEEK_API_KEY", get_runtime_setting("OPENAI_API_KEY", ""))
+DEEPSEEK_BASE_URL = get_runtime_setting("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+DEEPSEEK_MODEL = get_runtime_setting("DEEPSEEK_MODEL", "deepseek-chat")
 
 
 DEFAULT_WORK_VIEW = "品牌运营"
@@ -1575,6 +1587,44 @@ def check_api_status() -> bool:
         return False
 
 
+def direct_rag_available() -> bool:
+    return bool(DEEPSEEK_API_KEY) and os.path.exists(os.path.join("vector_store", "index.faiss"))
+
+
+@st.cache_resource(show_spinner=False)
+def get_direct_rag_engine(api_key: str, base_url: str, model: str):
+    if not api_key:
+        return None
+
+    try:
+        from config import settings
+        from src.rag_engine import RAGEngine
+        from src.vector_store import VectorStore
+
+        settings.DEEPSEEK_API_KEY = api_key
+        settings.DEEPSEEK_BASE_URL = base_url
+        settings.DEEPSEEK_MODEL = model
+
+        vector_store = VectorStore()
+        vector_store.load()
+        if vector_store.index is None:
+            return None
+        return RAGEngine(vector_store)
+    except Exception:
+        return None
+
+
+def query_direct_rag(question: str, top_k: int = 5) -> Optional[Dict]:
+    engine = get_direct_rag_engine(DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL)
+    if engine is None:
+        return None
+
+    try:
+        return engine.query(question=question, top_k=top_k)
+    except Exception:
+        return None
+
+
 def query_sample_rag(question: str, top_k: int = 5) -> Optional[Dict]:
     try:
         response = requests.post(
@@ -1585,8 +1635,8 @@ def query_sample_rag(question: str, top_k: int = 5) -> Optional[Dict]:
         if response.status_code == 200:
             return response.json()
     except Exception:
-        return None
-    return None
+        pass
+    return query_direct_rag(question, top_k=top_k)
 
 
 def query_market_agent(
@@ -1786,7 +1836,7 @@ def render_topbar() -> None:
     )
     selector_col, _ = st.columns([0.32, 0.68])
     with selector_col:
-        st.selectbox("当前工作视角", list(ROLE_VIEWS.keys()), key="work_view")
+        st.radio("当前工作视角", list(ROLE_VIEWS.keys()), key="work_view", horizontal=True)
 
 
 def metric_card(label: str, value: str, delta: str, tone: str) -> None:
@@ -2426,9 +2476,16 @@ def render_sample_data_lab() -> None:
 
     stats = get_local_sample_stats()
     api_online = check_api_status()
+    direct_online = direct_rag_available()
+    if api_online:
+        rag_status = "后端 API"
+    elif direct_online:
+        rag_status = "DeepSeek API"
+    else:
+        rag_status = "未连接"
 
     evidence_stats = [
-        ("后端 API", "在线" if api_online else "离线"),
+        ("RAG 问答", rag_status),
         ("证据评论", stats.get("count", 0) if stats.get("available") else "未加载"),
         ("数据定位", "护肤/美妆评论"),
         ("向量库", "TF-IDF 本地检索"),
@@ -2523,7 +2580,10 @@ def render_sample_data_lab() -> None:
         if result:
             st.session_state[result_key] = result
         else:
-            st.session_state[error_key] = "后端未启动或查询失败。可先运行 start.bat 启动 API 服务。"
+            st.session_state[error_key] = (
+                "RAG 问答未连接。线上请在 Streamlit Secrets 配置 DEEPSEEK_API_KEY，"
+                "或配置可公网访问的 API_BASE_URL。"
+            )
 
     if st.session_state.get(result_key):
         result = st.session_state[result_key]
@@ -2594,7 +2654,7 @@ def append_copilot_exchange(chat_key: str, user_text: str, answer: Optional[str]
     messages.append(
         {
             "role": "assistant",
-            "content": answer or "后端 API 未连接，或 DeepSeek API Key 未配置。请先启动 FastAPI 后端并设置 DEEPSEEK_API_KEY。",
+            "content": answer or "RAG 问答未连接。请配置 DEEPSEEK_API_KEY，或配置可公网访问的 API_BASE_URL。",
         }
     )
 
@@ -2719,8 +2779,10 @@ def render_sidebar() -> str:
     api_online = check_api_status()
     if api_online:
         st.sidebar.success("API 在线 · 500 条证据")
+    elif direct_rag_available():
+        st.sidebar.success("RAG 可用 · 500 条证据")
     else:
-        st.sidebar.warning("API 未启动")
+        st.sidebar.warning("证据库可浏览 · 问答需配置 API")
     return st.session_state.nav_page
 
 
