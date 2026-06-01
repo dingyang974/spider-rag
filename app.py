@@ -1365,6 +1365,7 @@ def inject_styles() -> None:
     }
     div[data-testid="stRadio"] [role="radiogroup"] {
         gap: 0.45rem;
+        flex-wrap: nowrap;
     }
     div[data-testid="stRadio"] input[type="radio"] {
         opacity: 0;
@@ -1379,6 +1380,7 @@ def inject_styles() -> None:
         border-radius: 8px;
         padding: 0.35rem 0.6rem;
         min-height: 2.15rem;
+        flex: 0 0 auto;
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
         justify-content: center;
     }
@@ -1388,9 +1390,8 @@ def inject_styles() -> None:
     div[data-testid="stRadio"] [role="radiogroup"] label p {
         color: var(--ink) !important;
         font-weight: 600;
-        white-space: normal;
+        white-space: nowrap;
         line-height: 1.25;
-        overflow-wrap: anywhere;
     }
     div[data-testid="stRadio"] [role="radiogroup"] label,
     div[data-testid="stRadio"] [role="radiogroup"] label div,
@@ -1834,7 +1835,7 @@ def render_topbar() -> None:
 """,
         unsafe_allow_html=True,
     )
-    selector_col, _ = st.columns([0.32, 0.68])
+    selector_col, _ = st.columns([0.58, 0.42])
     with selector_col:
         st.radio("当前工作视角", list(ROLE_VIEWS.keys()), key="work_view", horizontal=True)
 
